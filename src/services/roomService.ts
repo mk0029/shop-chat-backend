@@ -84,7 +84,7 @@ export async function refreshRoomSupportRoster(room: RoomDoc): Promise<RoomDoc> 
   ];
   (room as any).admins = admins;
   (room as any).participants = participants;
-  await room.save();
+  await (room as any).save();
   return room;
 }
 

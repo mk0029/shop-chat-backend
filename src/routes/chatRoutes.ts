@@ -58,6 +58,26 @@ const billCreatedEventSchema = z.object({
   paymentStatus: z.string().trim().optional(),
   createdAt: z.string().trim().optional(),
 });
+const workTaskEventSchema = z.object({
+  customerId: z.string().trim().min(1),
+  taskId: z.string().trim().min(1),
+  title: z.string().trim().min(1),
+  description: z.string().trim().optional(),
+  status: z.string().trim().optional(),
+  priority: z.string().trim().optional(),
+  issueCategory: z.string().trim().optional(),
+  dueAt: z.string().trim().optional(),
+  assignedTechnicianName: z.string().trim().optional(),
+  customerName: z.string().trim().optional(),
+  action: z
+    .enum(["created", "updated", "completed", "cancelled", "hold", "in-progress", "deleted", "due_changed"])
+    .optional(),
+  createdAt: z.string().trim().optional(),
+  updatedAt: z.string().trim().optional(),
+  completionNotes: z.string().trim().optional(),
+  cancellationReason: z.string().trim().optional(),
+  holdReason: z.string().trim().optional(),
+});
 
 router.use(requireShopAuth);
 
@@ -119,6 +139,74 @@ router.post("/events/bill-created", requireAdmin, async (req: AuthRequest, res, 
         totalAmount: amount,
         paymentStatus: input.paymentStatus || "pending",
         createdAt: input.createdAt || new Date().toISOString(),
+      },
+    });
+
+    const messagePayload = serializeMessage(message);
+    const roomPayload = serializeRoom(await Room.findById(room._id).lean());
+    getChatNamespace()?.to(`room:${room._id}`).emit("message:new", messagePayload);
+    getChatNamespace()?.to("admins").emit("room:updated", roomPayload);
+    getChatNamespace()?.to(`user:${room.customerId}`).emit("room:updated", roomPayload);
+    res.status(201).json({ message: messagePayload, room: roomPayload });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/events/work-task", requireAdmin, async (req: AuthRequest, res, next) => {
+  try {
+    const input = workTaskEventSchema.parse(req.body);
+    const room = await getOrCreateRoomByCustomerId(input.customerId);
+    if (!room) return res.status(404).json({ message: "Customer not found" });
+
+    const action = input.action || "updated";
+    const status = input.status || "pending";
+    const dueLine = input.dueAt ? `\nDue: ${input.dueAt}` : "";
+    const techLine = input.assignedTechnicianName ? `\nTechnician: ${input.assignedTechnicianName}` : "";
+    const actionText =
+      action === "created"
+        ? "New service task created"
+        : action === "completed"
+          ? "Service task completed"
+          : action === "cancelled"
+            ? "Service task cancelled"
+            : action === "hold"
+              ? "Service task put on hold"
+              : action === "in-progress"
+                ? "Service task is in progress"
+                : action === "due_changed"
+                  ? "Service task time updated"
+                  : action === "deleted"
+                    ? "Service task deleted"
+                    : "Service task updated";
+    const text = `${actionText}: ${input.title}.\nStatus: ${status}${dueLine}${techLine}\nFor more detail click here.`;
+    const eventVersion = input.updatedAt || input.createdAt || new Date().toISOString();
+    const message = await createMessage({
+      room,
+      sender: req.shopUser!,
+      text,
+      type: "text",
+      clientMessageId: `event:work_task:${input.taskId}:${action}:${eventVersion}`,
+      messageKind: "system",
+      systemEventType: "work_task",
+      systemEventData: {
+        eventType: "work_task",
+        customerId: input.customerId,
+        customerName: input.customerName || (room as any).customerName || "Customer",
+        taskId: input.taskId,
+        title: input.title,
+        description: input.description || "",
+        status,
+        priority: input.priority || "medium",
+        issueCategory: input.issueCategory || "other",
+        dueAt: input.dueAt || "",
+        assignedTechnicianName: input.assignedTechnicianName || "",
+        action,
+        createdAt: input.createdAt || new Date().toISOString(),
+        updatedAt: eventVersion,
+        completionNotes: input.completionNotes || "",
+        cancellationReason: input.cancellationReason || "",
+        holdReason: input.holdReason || "",
       },
     });
 

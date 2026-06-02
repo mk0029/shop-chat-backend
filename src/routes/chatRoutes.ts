@@ -49,6 +49,15 @@ const reactMessageSchema = z.object({
 const forwardMessageSchema = z.object({
   roomId: z.string(),
 });
+const billCreatedEventSchema = z.object({
+  customerId: z.string().trim().min(1),
+  billId: z.string().trim().min(1),
+  billNumber: z.string().trim().optional(),
+  customerName: z.string().trim().optional(),
+  totalAmount: z.number().optional(),
+  paymentStatus: z.string().trim().optional(),
+  createdAt: z.string().trim().optional(),
+});
 
 router.use(requireShopAuth);
 
@@ -79,6 +88,46 @@ router.post("/room/customer/:customerId", requireAdmin, async (req, res, next) =
     const payload = serializeRoom(room);
     getChatNamespace()?.to("admins").emit("room:updated", payload);
     res.json({ room: payload });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/events/bill-created", requireAdmin, async (req: AuthRequest, res, next) => {
+  try {
+    const input = billCreatedEventSchema.parse(req.body);
+    const room = await getOrCreateRoomByCustomerId(input.customerId);
+    if (!room) return res.status(404).json({ message: "Customer not found" });
+
+    const amount = Number(input.totalAmount || 0);
+    const billLabel = input.billNumber || input.billId;
+    const text = `Your bill is created${amount > 0 ? ` of ₹${amount}` : ""}.\nFor more detail click here.`;
+    const message = await createMessage({
+      room,
+      sender: req.shopUser!,
+      text,
+      type: "text",
+      clientMessageId: `event:bill_created:${input.billId}`,
+      messageKind: "system",
+      systemEventType: "bill_created",
+      systemEventData: {
+        eventType: "bill_created",
+        billId: input.billId,
+        billNumber: billLabel,
+        customerName: input.customerName || (room as any).customerName || "Customer",
+        customerId: input.customerId,
+        totalAmount: amount,
+        paymentStatus: input.paymentStatus || "pending",
+        createdAt: input.createdAt || new Date().toISOString(),
+      },
+    });
+
+    const messagePayload = serializeMessage(message);
+    const roomPayload = serializeRoom(await Room.findById(room._id).lean());
+    getChatNamespace()?.to(`room:${room._id}`).emit("message:new", messagePayload);
+    getChatNamespace()?.to("admins").emit("room:updated", roomPayload);
+    getChatNamespace()?.to(`user:${room.customerId}`).emit("room:updated", roomPayload);
+    res.status(201).json({ message: messagePayload, room: roomPayload });
   } catch (error) {
     next(error);
   }

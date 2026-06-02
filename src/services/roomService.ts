@@ -41,6 +41,9 @@ export function serializeMessage(message: any) {
     replyTo: message.replyTo || null,
     forwarded: Boolean(message.forwarded),
     forwardedFrom: message.forwardedFrom || null,
+    messageKind: message.messageKind || "user",
+    systemEventType: message.systemEventType || null,
+    systemEventData: message.systemEventData || null,
     reactions: message.reactions || [],
     editedAt: message.editedAt?.toISOString?.() || message.editedAt || null,
     deletedAt: message.deletedAt?.toISOString?.() || message.deletedAt || null,
@@ -113,6 +116,9 @@ export async function createMessage(params: {
   clientMessageId?: string;
   forwarded?: boolean;
   forwardedFrom?: string | null;
+  messageKind?: "user" | "system";
+  systemEventType?: string | null;
+  systemEventData?: Record<string, unknown> | null;
 }) {
   const text = params.text.trim();
   const message = await Message.findOneAndUpdate(
@@ -135,6 +141,9 @@ export async function createMessage(params: {
         replyTo: params.replyTo || null,
         forwarded: Boolean(params.forwarded),
         forwardedFrom: params.forwardedFrom || null,
+        messageKind: params.messageKind || "user",
+        systemEventType: params.systemEventType || null,
+        systemEventData: params.systemEventData || null,
       },
     },
     { upsert: true, new: true },
@@ -159,6 +168,8 @@ export async function createMessage(params: {
           senderId: params.sender.id,
           senderRole: chatRoleFor(params.sender),
           senderName: params.sender.name,
+          systemEventType: params.systemEventType || null,
+          systemEventData: params.systemEventData || null,
           createdAt: (message as any).createdAt || new Date(),
         },
       },

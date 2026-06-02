@@ -12,7 +12,7 @@ async function main() {
   const server = http.createServer(app);
   const io = new Server(server, {
     cors: {
-      origin: [env.shopFrontendUrl, "http://localhost:3000", "http://127.0.0.1:3000"],
+      origin: [env.shopFrontendUrl, "http://localhost:3000", "http://127.0.0.1:3000","https://jambh-ell.vercel.app"],
       credentials: true,
       methods: ["GET", "POST"],
     },

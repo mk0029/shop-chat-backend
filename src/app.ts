@@ -9,7 +9,7 @@ const app = express();
 app.set("trust proxy", 1);
 
 const allowedOrigins = new Set(
-  [env.shopFrontendUrl, "http://localhost:3000", "http://127.0.0.1:3000"]
+  [env.shopFrontendUrl, "http://localhost:3000", "http://127.0.0.1:3000","https://jambh-ell.vercel.app"]
     .filter(Boolean)
     .map((origin) => String(origin).replace(/\/+$/, "")),
 );

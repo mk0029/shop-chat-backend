@@ -121,38 +121,56 @@ export async function createMessage(params: {
   systemEventData?: Record<string, unknown> | null;
 }) {
   const text = params.text.trim();
-  const message = await Message.findOneAndUpdate(
-    params.clientMessageId
-      ? { roomId: params.room._id, senderId: params.sender.id, clientMessageId: params.clientMessageId }
-      : { _id: new mongoose.Types.ObjectId() },
-    {
-      $setOnInsert: {
+  const messageKind = params.messageKind || "user";
+  const systemEvent = messageKind === "system";
+  const senderId = systemEvent ? "system" : params.sender.id;
+  const senderRole = systemEvent ? "admin" : chatRoleFor(params.sender);
+  const senderName = systemEvent ? "System" : params.sender.name;
+
+  if (params.clientMessageId) {
+    const existing = await Message.findOne({
+      roomId: params.room._id,
+      clientMessageId: params.clientMessageId,
+    });
+    if (existing) return existing as MessageDoc;
+  }
+
+  let message: MessageDoc;
+  try {
+    message = (await Message.create({
+      roomId: params.room._id,
+      clientMessageId: params.clientMessageId || undefined,
+      type: params.type || "text",
+      text,
+      attachments: params.attachments || [],
+      senderId,
+      senderRole,
+      senderName,
+      status: "sent",
+      deliveredTo: [{ userId: senderId, role: senderRole, name: senderName, at: new Date() }],
+      readBy: [{ userId: senderId, role: senderRole, name: senderName, at: new Date() }],
+      replyTo: params.replyTo || null,
+      forwarded: Boolean(params.forwarded),
+      forwardedFrom: params.forwardedFrom || null,
+      messageKind,
+      systemEventType: params.systemEventType || null,
+      systemEventData: params.systemEventData || null,
+    })) as MessageDoc;
+  } catch (error: any) {
+    if (params.clientMessageId && error?.code === 11000) {
+      const existing = await Message.findOne({
         roomId: params.room._id,
-        clientMessageId: params.clientMessageId || undefined,
-        type: params.type || "text",
-        text,
-        attachments: params.attachments || [],
-        senderId: params.sender.id,
-        senderRole: chatRoleFor(params.sender),
-        senderName: params.sender.name,
-        status: "sent",
-        deliveredTo: [{ userId: params.sender.id, role: chatRoleFor(params.sender), name: params.sender.name, at: new Date() }],
-        readBy: [{ userId: params.sender.id, role: chatRoleFor(params.sender), name: params.sender.name, at: new Date() }],
-        replyTo: params.replyTo || null,
-        forwarded: Boolean(params.forwarded),
-        forwardedFrom: params.forwardedFrom || null,
-        messageKind: params.messageKind || "user",
-        systemEventType: params.systemEventType || null,
-        systemEventData: params.systemEventData || null,
-      },
-    },
-    { upsert: true, new: true },
-  );
+        clientMessageId: params.clientMessageId,
+      });
+      if (existing) return existing as MessageDoc;
+    }
+    throw error;
+  }
 
   const unreadBy: Record<string, number> = {};
   for (const participant of (params.room as any).participants || []) {
     const userId = String(participant.userId);
-    if (userId !== params.sender.id) {
+    if (userId !== senderId) {
       unreadBy[`unreadBy.${userId}`] = 1;
     }
   }
@@ -165,9 +183,9 @@ export async function createMessage(params: {
           messageId: String(message._id),
           text,
           type: params.type || "text",
-          senderId: params.sender.id,
-          senderRole: chatRoleFor(params.sender),
-          senderName: params.sender.name,
+          senderId,
+          senderRole,
+          senderName,
           systemEventType: params.systemEventType || null,
           systemEventData: params.systemEventData || null,
           createdAt: (message as any).createdAt || new Date(),

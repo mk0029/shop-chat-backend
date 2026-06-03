@@ -21,6 +21,27 @@ import { getChatNamespace } from "../sockets/chatSocket";
 
 const router = Router();
 
+function billCreatedEventKey(message: any) {
+  const eventType = String(message?.systemEventType || message?.systemEventData?.eventType || "");
+  const clientMessageId = String(message?.clientMessageId || "");
+  if (eventType !== "bill_created" && !clientMessageId.startsWith("event:bill_created:")) {
+    return "";
+  }
+  const billId = String(message?.systemEventData?.billId || "").trim();
+  return billId || clientMessageId.replace("event:bill_created:", "").trim();
+}
+
+function dedupeBillCreatedEvents(messages: any[]) {
+  const seen = new Set<string>();
+  return messages.filter((message) => {
+    const key = billCreatedEventKey(message);
+    if (!key) return true;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 const sendMessageSchema = z.object({
   roomId: z.string(),
   text: z.string().trim().min(1).max(5000),
@@ -231,7 +252,7 @@ router.get("/messages/:roomId", async (req: AuthRequest, res, next) => {
     const filter: any = { roomId: room._id, hiddenFor: { $ne: req.shopUser!.id } };
     if (before && !Number.isNaN(before.getTime())) filter.createdAt = { $lt: before };
     const messages = await Message.find(filter).sort({ createdAt: -1 }).limit(limit).lean();
-    res.json({ messages: messages.reverse().map(serializeMessage) });
+    res.json({ messages: dedupeBillCreatedEvents(messages.reverse()).map(serializeMessage) });
   } catch (error) {
     next(error);
   }

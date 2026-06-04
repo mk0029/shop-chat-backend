@@ -10,6 +10,7 @@ export const env = {
   sanityDataset: process.env.SANITY_DATASET || process.env.NEXT_PUBLIC_SANITY_DATASET || "production",
   sanityApiVersion: process.env.SANITY_API_VERSION || process.env.NEXT_PUBLIC_SANITY_API_VERSION || "2024-01-01",
   sanityApiToken: process.env.SANITY_API_TOKEN || "",
+  chatSyncToken: process.env.CHAT_SYNC_TOKEN || process.env.JWT_SECRET || "",
 };
 
 export function validateEnv() {

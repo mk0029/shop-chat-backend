@@ -11,6 +11,7 @@ import {
 } from "../services/roomService";
 import { Room } from "../models/Room";
 import type { ShopUser } from "../types/auth";
+import { notifyChatMessageCreated } from "../services/notificationService";
 
 let chatNamespace: ReturnType<Server["of"]> | null = null;
 const onlineUsers = new Map<string, { user: ShopUser; sockets: number }>();
@@ -18,6 +19,34 @@ const lastSeenByUser = new Map<string, string>();
 
 export function getChatNamespace() {
   return chatNamespace;
+}
+
+function deviceRoom(userId: string, deviceId: string) {
+  return `device:${userId}:${deviceId}`;
+}
+
+export function emitDeviceRevoked(input: {
+  userId: string;
+  deviceId?: string;
+  reason?: string;
+  loggedInOn?: string;
+  message?: string;
+}) {
+  if (!chatNamespace || !input.userId) return false;
+  const payload = {
+    reason: input.reason || "LOGGED_IN_ON_ANOTHER_DEVICE",
+    loggedInOn: input.loggedInOn,
+    message:
+      input.message ||
+      "Your account has been logged out from this device because it was logged in on another device.",
+    at: new Date().toISOString(),
+  };
+  if (input.deviceId) {
+    chatNamespace.to(deviceRoom(input.userId, input.deviceId)).emit("session:revoked", payload);
+    return true;
+  }
+  chatNamespace.to(`user:${input.userId}`).emit("session:revoked", payload);
+  return true;
 }
 
 function emitPresence() {
@@ -57,6 +86,14 @@ export function registerChatSocket(io: Server) {
   chatNamespace.on("connection", async (socket) => {
     const user = socket.data.user as ShopUser;
     socket.join(`user:${user.id}`);
+    const initialDeviceId =
+      typeof socket.handshake.auth?.deviceId === "string"
+        ? socket.handshake.auth.deviceId.trim()
+        : "";
+    if (initialDeviceId) {
+      socket.join(deviceRoom(user.id, initialDeviceId));
+      socket.data.deviceId = initialDeviceId;
+    }
     if (isAdmin(user)) socket.join("admins");
 
     const previous = onlineUsers.get(user.id);
@@ -90,6 +127,17 @@ export function registerChatSocket(io: Server) {
     socket.on("room:leave", ({ roomId }: { roomId?: string }) => {
       if (!roomId) return;
       socket.leave(`room:${roomId}`);
+    });
+
+    socket.on("device:register", ({ deviceId }: { deviceId?: string }) => {
+      const nextDeviceId = String(deviceId || "").trim();
+      if (!nextDeviceId) return;
+      const previousDeviceId = typeof socket.data.deviceId === "string" ? socket.data.deviceId : "";
+      if (previousDeviceId && previousDeviceId !== nextDeviceId) {
+        socket.leave(deviceRoom(user.id, previousDeviceId));
+      }
+      socket.data.deviceId = nextDeviceId;
+      socket.join(deviceRoom(user.id, nextDeviceId));
     });
 
     socket.on(
@@ -130,6 +178,7 @@ export function registerChatSocket(io: Server) {
           chatNamespace?.to(`room:${room._id}`).emit("message:new", messagePayload);
           chatNamespace?.to("admins").emit("room:updated", roomPayload);
           chatNamespace?.to(`user:${room.customerId}`).emit("room:updated", roomPayload);
+          void notifyChatMessageCreated({ room, message, sender: user });
           ack?.({ ok: true, message: messagePayload, room: roomPayload, clientMessageId: input.clientMessageId });
         } catch (error) {
           ack?.({ ok: false, error: "Message failed", clientMessageId: input.clientMessageId });

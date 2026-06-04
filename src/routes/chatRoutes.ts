@@ -18,6 +18,7 @@ import {
   serializeRoom,
 } from "../services/roomService";
 import { getChatNamespace } from "../sockets/chatSocket";
+import { notifyChatMessageCreated } from "../services/notificationService";
 
 const router = Router();
 
@@ -168,6 +169,7 @@ router.post("/events/bill-created", requireAdmin, async (req: AuthRequest, res, 
     getChatNamespace()?.to(`room:${room._id}`).emit("message:new", messagePayload);
     getChatNamespace()?.to("admins").emit("room:updated", roomPayload);
     getChatNamespace()?.to(`user:${room.customerId}`).emit("room:updated", roomPayload);
+    void notifyChatMessageCreated({ room, message, sender: req.shopUser! });
     res.status(201).json({ message: messagePayload, room: roomPayload });
   } catch (error) {
     next(error);

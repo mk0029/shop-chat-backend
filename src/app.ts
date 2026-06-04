@@ -4,6 +4,7 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { env } from "./config/env";
 import chatRoutes from "./routes/chatRoutes";
+import sessionRoutes from "./routes/sessionRoutes";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -39,6 +40,8 @@ app.use(
   }),
   chatRoutes,
 );
+
+app.use("/internal", sessionRoutes);
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "shop-chat-backend", at: new Date().toISOString() });

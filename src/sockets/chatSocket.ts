@@ -35,6 +35,7 @@ export function emitDeviceRevoked(input: {
   if (!chatNamespace || !input.userId) return false;
   const payload = {
     reason: input.reason || "LOGGED_IN_ON_ANOTHER_DEVICE",
+    deviceId: input.deviceId,
     loggedInOn: input.loggedInOn,
     message:
       input.message ||

@@ -6,6 +6,7 @@ export const env = {
   port: Number(process.env.PORT || 5050),
   mongoUri: process.env.MONGO_URI || "",
   shopFrontendUrl: process.env.SHOP_FRONTEND_URL || "http://localhost:3000",
+  notificationApiUrl: process.env.NOTIFICATION_API_URL || process.env.SHOP_FRONTEND_URL || "http://localhost:3000",
   sanityProjectId: process.env.SANITY_PROJECT_ID || process.env.NEXT_PUBLIC_SANITY_PROJECT_ID || "",
   sanityDataset: process.env.SANITY_DATASET || process.env.NEXT_PUBLIC_SANITY_DATASET || "production",
   sanityApiVersion: process.env.SANITY_API_VERSION || process.env.NEXT_PUBLIC_SANITY_API_VERSION || "2024-01-01",

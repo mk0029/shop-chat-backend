@@ -4,7 +4,7 @@ import type { RoomDoc } from "../models/Room";
 import type { ShopUser } from "../types/auth";
 
 function appBaseUrl() {
-  return String(env.shopFrontendUrl || "").replace(/\/+$/, "");
+  return String(env.notificationApiUrl || env.shopFrontendUrl || "").replace(/\/+$/, "");
 }
 
 function messagePreview(text: string, type?: string) {

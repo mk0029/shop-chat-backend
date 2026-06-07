@@ -86,6 +86,7 @@ export function registerChatSocket(io: Server) {
 
   chatNamespace.on("connection", async (socket) => {
     const user = socket.data.user as ShopUser;
+    const contributesPresence = socket.handshake.auth?.presence !== false;
     socket.join(`user:${user.id}`);
     const initialDeviceId =
       typeof socket.handshake.auth?.deviceId === "string"
@@ -97,10 +98,12 @@ export function registerChatSocket(io: Server) {
     }
     if (isAdmin(user)) socket.join("admins");
 
-    const previous = onlineUsers.get(user.id);
-    lastSeenByUser.set(user.id, new Date().toISOString());
-    onlineUsers.set(user.id, { user, sockets: (previous?.sockets || 0) + 1 });
-    emitPresence();
+    if (contributesPresence) {
+      const previous = onlineUsers.get(user.id);
+      lastSeenByUser.set(user.id, new Date().toISOString());
+      onlineUsers.set(user.id, { user, sockets: (previous?.sockets || 0) + 1 });
+      emitPresence();
+    }
 
     if (user.role === "customer") {
       try {
@@ -226,14 +229,16 @@ export function registerChatSocket(io: Server) {
     });
 
     socket.on("disconnect", () => {
-      const previous = onlineUsers.get(user.id);
-      if (!previous || previous.sockets <= 1) {
-        onlineUsers.delete(user.id);
-        lastSeenByUser.set(user.id, new Date().toISOString());
-      } else {
-        onlineUsers.set(user.id, { user, sockets: previous.sockets - 1 });
+      if (contributesPresence) {
+        const previous = onlineUsers.get(user.id);
+        if (!previous || previous.sockets <= 1) {
+          onlineUsers.delete(user.id);
+          lastSeenByUser.set(user.id, new Date().toISOString());
+        } else {
+          onlineUsers.set(user.id, { user, sockets: previous.sockets - 1 });
+        }
+        emitPresence();
       }
-      emitPresence();
     });
   });
 }

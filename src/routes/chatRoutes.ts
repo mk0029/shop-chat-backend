@@ -5,6 +5,7 @@ import { Room } from "../models/Room";
 import { requireAdmin, requireCustomer, requireShopAuth, type AuthRequest } from "../middleware/auth";
 import {
   assertRoomAccess,
+  clearRoomMessagesForEveryone,
   createMessage,
   deleteMessage,
   editMessage,
@@ -135,6 +136,29 @@ router.post("/room/customer/:customerId", requireAdmin, async (req, res, next) =
   }
 });
 
+router.post("/rooms/:roomId/clear", requireAdmin, async (req: AuthRequest, res, next) => {
+  try {
+    const room = await assertRoomAccess(req.shopUser!, String(req.params.roomId));
+    if (!room) return res.status(403).json({ message: "Room access denied" });
+
+    const result = await clearRoomMessagesForEveryone(room, req.shopUser!);
+    const messagePayload = serializeMessage(result.message);
+    const roomPayload = serializeRoom(await Room.findById(room._id).lean());
+
+    getChatNamespace()?.to(`room:${room._id}`).emit("message:cleared", {
+      roomId: String(room._id),
+      message: messagePayload,
+    });
+    getChatNamespace()?.to(`room:${room._id}`).emit("message:new", messagePayload);
+    getChatNamespace()?.to("admins").emit("room:updated", roomPayload);
+    getChatNamespace()?.to(`user:${room.customerId}`).emit("room:updated", roomPayload);
+
+    res.json({ message: messagePayload, room: roomPayload });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post("/events/bill-created", requireAdmin, async (req: AuthRequest, res, next) => {
   try {
     const input = billCreatedEventSchema.parse(req.body);
@@ -188,20 +212,20 @@ router.post("/events/work-task", requireAdmin, async (req: AuthRequest, res, nex
     const techLine = input.assignedTechnicianName ? `\nTechnician: ${input.assignedTechnicianName}` : "";
     const actionText =
       action === "created"
-        ? "New work assigned"
+        ? "Shop assigned new work"
         : action === "completed"
-          ? "Task completed"
+          ? "Shop completed your task"
           : action === "cancelled"
-            ? "Service task cancelled"
+            ? "Shop cancelled your task"
             : action === "hold"
-              ? "Service task put on hold"
+              ? "Shop put your task on hold"
               : action === "in-progress"
-                ? "Service task is in progress"
+                ? "Shop started your task"
                 : action === "due_changed"
-                  ? "Service task time updated"
+                  ? "Shop updated your work time"
                   : action === "deleted"
-                    ? "Service task deleted"
-                    : "Service task updated";
+                    ? "Shop removed your task"
+                    : "Shop updated your work";
     const text = `${actionText}: ${input.title}.\nStatus: ${status}${dueLine}${techLine}\nFor more detail click here.`;
     const eventVersion = input.updatedAt || input.createdAt || new Date().toISOString();
     const message = await createMessage({

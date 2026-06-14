@@ -257,6 +257,31 @@ export async function deleteMessage(messageId: string, user: ShopUser, scope: "m
   return { room, message, localOnly: false };
 }
 
+export async function clearRoomMessagesForEveryone(room: RoomDoc, user: ShopUser) {
+  const now = new Date();
+  await Message.deleteMany({ roomId: room._id });
+  await Room.updateOne({ _id: room._id }, { $set: { unreadBy: {} } });
+
+  const message = await createMessage({
+    room,
+    sender: user,
+    text: "Chat cleared by admin",
+    type: "text",
+    messageKind: "system",
+    systemEventType: "chat_cleared",
+    systemEventData: {
+      eventType: "chat_cleared",
+      clearedById: user.id,
+      clearedByName: user.name,
+      clearedByRole: user.role,
+      clearedAt: now.toISOString(),
+    },
+  });
+
+  await Room.updateOne({ _id: room._id }, { $set: { [`unreadBy.${user.id}`]: 0 } });
+  return { room, message };
+}
+
 export async function reactToMessage(messageId: string, user: ShopUser, emoji: string | null) {
   if (!mongoose.Types.ObjectId.isValid(messageId)) return null;
   const message = await Message.findById(messageId);

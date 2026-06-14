@@ -143,7 +143,7 @@ router.post("/events/bill-created", requireAdmin, async (req: AuthRequest, res, 
 
     const amount = Number(input.totalAmount || 0);
     const billLabel = input.billNumber || input.billId;
-    const text = `Your bill is created${amount > 0 ? ` of ₹${amount}` : ""}.\nFor more detail click here.`;
+    const text = `Bill created${amount > 0 ? ` of \u20b9${amount}` : ""}.\nFor more detail click here.`;
     const message = await createMessage({
       room,
       sender: req.shopUser!,
@@ -188,9 +188,9 @@ router.post("/events/work-task", requireAdmin, async (req: AuthRequest, res, nex
     const techLine = input.assignedTechnicianName ? `\nTechnician: ${input.assignedTechnicianName}` : "";
     const actionText =
       action === "created"
-        ? "New service task created"
+        ? "New work assigned"
         : action === "completed"
-          ? "Service task completed"
+          ? "Task completed"
           : action === "cancelled"
             ? "Service task cancelled"
             : action === "hold"

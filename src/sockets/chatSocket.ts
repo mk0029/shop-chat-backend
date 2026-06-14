@@ -14,8 +14,12 @@ import type { ShopUser } from "../types/auth";
 import { notifyChatMessageCreated } from "../services/notificationService";
 
 let chatNamespace: ReturnType<Server["of"]> | null = null;
-const onlineUsers = new Map<string, { user: ShopUser; sockets: number }>();
+const PRESENCE_TTL_MS = 75_000;
+const PRESENCE_PRUNE_INTERVAL_MS = 30_000;
+
+const onlineUsers = new Map<string, { user: ShopUser; sockets: Map<string, string> }>();
 const lastSeenByUser = new Map<string, string>();
+let presencePruneTimer: NodeJS.Timeout | null = null;
 
 export function getChatNamespace() {
   return chatNamespace;
@@ -51,6 +55,7 @@ export function emitDeviceRevoked(input: {
 }
 
 function emitPresence() {
+  pruneStalePresence(false);
   const users = Array.from(onlineUsers.values()).map(({ user }) => ({
     userId: user.id,
     role: user.role,
@@ -60,6 +65,55 @@ function emitPresence() {
   }));
   const lastSeen = Array.from(lastSeenByUser.entries()).map(([userId, at]) => ({ userId, online: false, lastSeen: at }));
   chatNamespace?.emit("presence:snapshot", { users, lastSeen });
+}
+
+function touchPresence(socket: Socket, user: ShopUser) {
+  const previous = onlineUsers.get(user.id);
+  const sockets = previous?.sockets || new Map<string, string>();
+  const now = new Date().toISOString();
+  sockets.set(socket.id, now);
+  lastSeenByUser.set(user.id, now);
+  onlineUsers.set(user.id, { user, sockets });
+}
+
+function removePresence(socket: Socket, user: ShopUser) {
+  const previous = onlineUsers.get(user.id);
+  if (!previous) return;
+  previous.sockets.delete(socket.id);
+  if (previous.sockets.size === 0) {
+    onlineUsers.delete(user.id);
+    lastSeenByUser.set(user.id, new Date().toISOString());
+    return;
+  }
+  onlineUsers.set(user.id, previous);
+}
+
+function pruneStalePresence(shouldEmit = true) {
+  const cutoff = Date.now() - PRESENCE_TTL_MS;
+  let changed = false;
+
+  for (const [userId, presence] of onlineUsers.entries()) {
+    for (const [socketId, lastSeen] of presence.sockets.entries()) {
+      const lastSeenTime = Date.parse(lastSeen);
+      if (!Number.isFinite(lastSeenTime) || lastSeenTime < cutoff) {
+        presence.sockets.delete(socketId);
+        changed = true;
+      }
+    }
+
+    if (presence.sockets.size === 0) {
+      onlineUsers.delete(userId);
+      lastSeenByUser.set(userId, new Date().toISOString());
+    }
+  }
+
+  if (changed && shouldEmit) emitPresence();
+}
+
+function startPresencePruner() {
+  if (presencePruneTimer) return;
+  presencePruneTimer = setInterval(() => pruneStalePresence(), PRESENCE_PRUNE_INTERVAL_MS);
+  presencePruneTimer.unref?.();
 }
 
 async function authenticateSocket(socket: Socket) {
@@ -72,6 +126,7 @@ async function authenticateSocket(socket: Socket) {
 
 export function registerChatSocket(io: Server) {
   chatNamespace = io.of("/chat");
+  startPresencePruner();
 
   chatNamespace.use(async (socket, next) => {
     try {
@@ -99,9 +154,7 @@ export function registerChatSocket(io: Server) {
     if (isAdmin(user)) socket.join("admins");
 
     if (contributesPresence) {
-      const previous = onlineUsers.get(user.id);
-      lastSeenByUser.set(user.id, new Date().toISOString());
-      onlineUsers.set(user.id, { user, sockets: (previous?.sockets || 0) + 1 });
+      touchPresence(socket, user);
       emitPresence();
     }
 
@@ -142,6 +195,17 @@ export function registerChatSocket(io: Server) {
       }
       socket.data.deviceId = nextDeviceId;
       socket.join(deviceRoom(user.id, nextDeviceId));
+    });
+
+    socket.on("presence:ping", () => {
+      if (!contributesPresence) return;
+      touchPresence(socket, user);
+    });
+
+    socket.on("presence:offline", () => {
+      if (!contributesPresence) return;
+      removePresence(socket, user);
+      emitPresence();
     });
 
     socket.on(
@@ -230,13 +294,7 @@ export function registerChatSocket(io: Server) {
 
     socket.on("disconnect", () => {
       if (contributesPresence) {
-        const previous = onlineUsers.get(user.id);
-        if (!previous || previous.sockets <= 1) {
-          onlineUsers.delete(user.id);
-          lastSeenByUser.set(user.id, new Date().toISOString());
-        } else {
-          onlineUsers.set(user.id, { user, sockets: previous.sockets - 1 });
-        }
+        removePresence(socket, user);
         emitPresence();
       }
     });

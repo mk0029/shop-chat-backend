@@ -19,6 +19,8 @@ const LastMessageSchema = new Schema(
     senderId: String,
     senderRole: String,
     senderName: String,
+    systemEventType: { type: String, default: null },
+    systemEventData: { type: Schema.Types.Mixed, default: null },
     createdAt: Date,
   },
   { _id: false },

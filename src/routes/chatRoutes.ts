@@ -266,6 +266,7 @@ router.post("/events/work-task", requireAdmin, async (req: AuthRequest, res, nex
     getChatNamespace()?.to(`room:${room._id}`).emit("message:new", messagePayload);
     getChatNamespace()?.to("admins").emit("room:updated", roomPayload);
     getChatNamespace()?.to(`user:${room.customerId}`).emit("room:updated", roomPayload);
+    void notifyChatMessageCreated({ room, message, sender: req.shopUser! });
     res.status(201).json({ message: messagePayload, room: roomPayload });
   } catch (error) {
     next(error);
@@ -300,6 +301,7 @@ router.post("/messages", async (req: AuthRequest, res, next) => {
     getChatNamespace()?.to(`room:${room._id}`).emit("message:new", messagePayload);
     getChatNamespace()?.to("admins").emit("room:updated", roomPayload);
     getChatNamespace()?.to(`user:${room.customerId}`).emit("room:updated", roomPayload);
+    void notifyChatMessageCreated({ room, message, sender: req.shopUser! });
     res.status(201).json({ message: messagePayload, room: roomPayload });
   } catch (error) {
     next(error);

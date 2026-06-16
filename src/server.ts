@@ -4,6 +4,7 @@ import app from "./app";
 import { connectDb } from "./config/db";
 import { env, validateEnv } from "./config/env";
 import { registerChatSocket } from "./sockets/chatSocket";
+import { startNotificationScheduler } from "./services/notificationScheduler";
 
 async function main() {
   validateEnv();
@@ -19,6 +20,7 @@ async function main() {
   });
 
   registerChatSocket(io);
+  startNotificationScheduler();
 
   server.listen(env.port, () => {
     console.log(`[shop-chat] listening on ${env.port}`);

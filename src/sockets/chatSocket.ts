@@ -19,10 +19,18 @@ const PRESENCE_PRUNE_INTERVAL_MS = 30_000;
 
 const onlineUsers = new Map<string, { user: ShopUser; sockets: Map<string, string> }>();
 const lastSeenByUser = new Map<string, string>();
+const activeChatBySocket = new Map<string, { userId: string; roomId: string }>();
 let presencePruneTimer: NodeJS.Timeout | null = null;
 
 export function getChatNamespace() {
   return chatNamespace;
+}
+
+export function isUserActiveInChatRoom(userId: string, roomId: string) {
+  for (const active of activeChatBySocket.values()) {
+    if (active.userId === userId && active.roomId === roomId) return true;
+  }
+  return false;
 }
 
 function deviceRoom(userId: string, deviceId: string) {
@@ -184,6 +192,19 @@ export function registerChatSocket(io: Server) {
     socket.on("room:leave", ({ roomId }: { roomId?: string }) => {
       if (!roomId) return;
       socket.leave(`room:${roomId}`);
+      const active = activeChatBySocket.get(socket.id);
+      if (active?.roomId === roomId) activeChatBySocket.delete(socket.id);
+    });
+
+    socket.on("chat:active", async ({ roomId }: { roomId?: string | null }) => {
+      const nextRoomId = String(roomId || "").trim();
+      if (!nextRoomId) {
+        activeChatBySocket.delete(socket.id);
+        return;
+      }
+      const room = await assertRoomAccess(user, nextRoomId);
+      if (!room) return;
+      activeChatBySocket.set(socket.id, { userId: user.id, roomId: String(room._id) });
     });
 
     socket.on("device:register", ({ deviceId }: { deviceId?: string }) => {
@@ -293,6 +314,7 @@ export function registerChatSocket(io: Server) {
     });
 
     socket.on("disconnect", () => {
+      activeChatBySocket.delete(socket.id);
       if (contributesPresence) {
         removePresence(socket, user);
         emitPresence();

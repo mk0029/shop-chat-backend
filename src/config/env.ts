@@ -12,6 +12,16 @@ export const env = {
   sanityApiVersion: process.env.SANITY_API_VERSION || process.env.NEXT_PUBLIC_SANITY_API_VERSION || "2024-01-01",
   sanityApiToken: process.env.SANITY_API_TOKEN || "",
   chatSyncToken: process.env.CHAT_SYNC_TOKEN || process.env.JWT_SECRET || "",
+  firebaseServiceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON || "",
+  firebaseProjectId: process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "",
+  firebaseClientEmail: process.env.FIREBASE_CLIENT_EMAIL || "",
+  firebasePrivateKey: process.env.FIREBASE_PRIVATE_KEY || "",
+  fcmAndroidChannelId: process.env.FCM_ANDROID_CHANNEL_ID || "shop_notifications",
+  notificationRetryAttempts: Math.max(1, Math.min(5, Number(process.env.NOTIFICATION_RETRY_ATTEMPTS || 2))),
+  enableNotificationCron: process.env.ENABLE_NOTIFICATION_CRON === "true",
+  holidayCalendarApiUrl: process.env.HOLIDAY_CALENDAR_API_URL || "",
+  holidayCalendarApiKey: process.env.HOLIDAY_CALENDAR_API_KEY || process.env.CALENDARIFIC_API_KEY || "",
+  holidayCalendarCountry: process.env.HOLIDAY_CALENDAR_COUNTRY || "IN",
 };
 
 export function validateEnv() {

@@ -5,6 +5,7 @@ import rateLimit from "express-rate-limit";
 import { env } from "./config/env";
 import chatRoutes from "./routes/chatRoutes";
 import sessionRoutes from "./routes/sessionRoutes";
+import notificationRoutes from "./routes/notificationRoutes";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -42,6 +43,8 @@ app.use(
 );
 
 app.use("/internal", sessionRoutes);
+app.use("/notifications", notificationRoutes);
+app.use("/", notificationRoutes);
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "shop-chat-backend", at: new Date().toISOString() });

@@ -64,15 +64,31 @@ export async function verifyShopAuth(rawAuthStorage: string): Promise<ShopUser |
   const id = String(rawUser.id || rawUser._id || "");
   const customerId = rawUser.customerId ? String(rawUser.customerId) : "";
   if (!id && !customerId) return null;
+  const payloadRole = String(payload.role || rawUser.role || "") as ShopRole;
 
   const query = `*[_type == "user" && (_id == $id || customerId == $customerId)][0]{
     _id, customerId, name, email, phone, location, role,
     "isActive": select(defined(isActive) => isActive, true)
   }`;
-  const sanityUser = await sanityClient.fetch(query, { id, customerId });
+  let sanityUser: any = null;
+  try {
+    sanityUser = await sanityClient.fetch(query, { id, customerId });
+  } catch (error) {
+    if (!payloadRole) throw error;
+    console.warn("[auth] Sanity auth verification unavailable; using authenticated payload", error instanceof Error ? error.message : error);
+    return {
+      id,
+      customerId: customerId || null,
+      role: payloadRole,
+      name: String(rawUser.name || payloadRole),
+      email: rawUser.email ? String(rawUser.email) : null,
+      phone: rawUser.phone ? String(rawUser.phone) : null,
+      location: rawUser.location ? String(rawUser.location) : null,
+    };
+  }
   if (!sanityUser || sanityUser.isActive === false) return null;
 
-  const role = String(sanityUser.role || payload.role || rawUser.role || "") as ShopRole;
+  const role = String(sanityUser.role || payloadRole || "") as ShopRole;
   if (!role) return null;
 
   return {

@@ -328,23 +328,41 @@ async function sendToToken(input: {
 }) {
   const messaging = getFirebaseMessaging();
   if (!messaging) return { ok: false, error: "Firebase Admin is not configured" };
+  const messageData: Record<string, string> = {
+    ...input.data,
+    title: input.title,
+    body: input.body,
+    notificationTitle: input.title,
+    notificationBody: input.body,
+  };
   let lastError = "";
   for (let attempt = 1; attempt <= env.notificationRetryAttempts; attempt += 1) {
     try {
       await messaging.send({
         token: input.token.token,
-        notification: { title: input.title, body: input.body },
-        data: input.data,
+        data: messageData,
         android: {
           priority: "high",
           notification: {
+            title: input.title,
+            body: input.body,
             channelId: env.fcmAndroidChannelId,
             priority: "high",
             defaultSound: true,
           },
         },
         apns: {
-          payload: { aps: { sound: "default", contentAvailable: true } },
+          payload: {
+            aps: {
+              alert: { title: input.title, body: input.body },
+              sound: "default",
+              contentAvailable: true,
+            },
+          },
+        },
+        webpush: {
+          headers: { Urgency: "high" },
+          fcmOptions: { link: input.data.route || "/" },
         },
       });
       return { ok: true, attempts: attempt };

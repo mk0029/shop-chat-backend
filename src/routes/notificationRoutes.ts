@@ -33,12 +33,16 @@ const registerTokenSchema = z.object({
   deviceName: z.string().trim().optional(),
   platform: z.string().trim().optional(),
   role: z.string().trim().optional(),
+  displayName: z.string().trim().optional(),
+  name: z.string().trim().optional(),
   deviceInfo: z
     .object({
       deviceId: z.string().trim().optional(),
       deviceName: z.string().trim().optional(),
       platform: z.string().trim().optional(),
       role: z.string().trim().optional(),
+      displayName: z.string().trim().optional(),
+      name: z.string().trim().optional(),
       browser: z.string().trim().optional(),
       os: z.string().trim().optional(),
     })
@@ -57,6 +61,7 @@ router.post("/register-token", requireNotificationAccess, async (req: AuthReques
       deviceName: input.deviceName || deviceInfo.deviceName || deviceInfo.browser || deviceInfo.os,
       platform: input.platform || deviceInfo.platform,
       role: input.role || deviceInfo.role,
+      displayName: input.displayName || input.name || deviceInfo.displayName || deviceInfo.name,
     });
     res.json({ success: true, data: result });
   } catch (error) {

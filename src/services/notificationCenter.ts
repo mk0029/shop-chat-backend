@@ -162,6 +162,40 @@ async function getRegisteredAudienceUserIds(audience: "admins" | "all" | "custom
   return unique(fallback);
 }
 
+async function getRegisteredAudienceUsers(audience: "admins" | "all" | "customers") {
+  const roleFilter =
+    audience === "customers"
+      ? { role: "customer" }
+      : audience === "admins"
+        ? { role: { $in: ["admin", "super_admin", "technician"] } }
+        : {};
+  let tokens = await FcmToken.find({ isActive: true, ...roleFilter })
+    .sort({ updatedAt: -1 })
+    .select({ userId: 1, displayName: 1, role: 1 })
+    .lean();
+  if (!tokens.length && audience !== "all") {
+    tokens = await FcmToken.find({ isActive: true })
+      .sort({ updatedAt: -1 })
+      .select({ userId: 1, displayName: 1, role: 1 })
+      .lean();
+    console.warn("[notifications] audience role metadata missing; using active token fallback", {
+      audience,
+      activeTokenUsers: tokens.length,
+    });
+  }
+  const seen = new Set<string>();
+  return tokens
+    .map((token) => ({
+      userId: String(token.userId || "").trim(),
+      displayName: String(token.displayName || "").trim(),
+    }))
+    .filter((token) => {
+      if (!token.userId || seen.has(token.userId)) return false;
+      seen.add(token.userId);
+      return true;
+    });
+}
+
 function defaultTitleBody(type: NotificationEventType, data: Record<string, any>, input: NotificationInput, receiverUserId: string) {
   const title = String(input.title || "").trim();
   const body = String(input.body || "").trim();
@@ -218,12 +252,25 @@ async function targetsFor(input: NotificationInput, normalizedEventType: Notific
     targetIds = unique([data.customerId, data.adminId, data.assignedUserId, ...(input.userIds || []), input.userId]);
   } else if (
     normalizedEventType === "scheduled.dailyGreeting" ||
-    normalizedEventType === "daily_good_morning" ||
+    normalizedEventType === "daily_good_morning"
+  ) {
+    const users = await getRegisteredAudienceUsers("all");
+    return users
+      .filter((user) => user.userId !== actorUserId)
+      .map((user) => {
+        const name = user.displayName || "there";
+        return {
+          userId: user.userId,
+          title: `Good morning, ${name}`,
+          body: `Good morning, ${name}. Have a great day from Jambh Electrics.`,
+          data: { ...data, greetingName: name },
+        };
+      });
+  } else if (
     normalizedEventType === "scheduled.festivalGreeting" ||
     normalizedEventType === "hindu_festival_greeting"
   ) {
-    const [admins, customers] = await Promise.all([getActiveAdmins(), getActiveCustomers()]);
-    targetIds = unique([...admins.map((user) => user._id), ...customers.map((user) => user._id)]);
+    targetIds = [];
   } else if (normalizedEventType === "system.general") {
     if (input.audience) targetIds = await getRegisteredAudienceUserIds(input.audience);
     else targetIds = unique([input.userId, ...(input.userIds || []), data.targetUserId, data.customerId]);
@@ -493,6 +540,7 @@ export async function registerNotificationToken(input: {
   deviceName?: string;
   platform?: string;
   role?: string;
+  displayName?: string;
 }) {
   const userId = (await resolveUserIds([input.userId]))[0] || input.userId;
   const now = new Date();
@@ -506,6 +554,7 @@ export async function registerNotificationToken(input: {
         deviceName: input.deviceName || "",
         platform: input.platform || "",
         role: input.role || "",
+        displayName: input.displayName || "",
         isActive: true,
         lastSeen: now,
         deactivatedAt: null,

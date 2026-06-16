@@ -8,6 +8,7 @@ const FcmTokenSchema = new Schema(
     deviceName: { type: String, default: "" },
     platform: { type: String, default: "" },
     role: { type: String, default: "", index: true },
+    displayName: { type: String, default: "" },
     isActive: { type: Boolean, default: true, index: true },
     lastSeen: { type: Date, default: Date.now },
     deactivatedAt: { type: Date, default: null },

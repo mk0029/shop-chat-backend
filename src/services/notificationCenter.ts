@@ -362,6 +362,17 @@ async function sendToToken(input: {
         },
         webpush: {
           headers: { Urgency: "high" },
+          notification: {
+            title: input.title,
+            body: input.body,
+            icon: String(input.data.icon || "/je-p-192.png"),
+            badge: String(input.data.badge || "/je-p-48.png"),
+            image: input.data.image || input.data.imageUrl ? String(input.data.image || input.data.imageUrl) : undefined,
+            tag: String(input.data.tag || input.data.id || input.data.eventId || input.data.type || "app-notification"),
+            renotify: true,
+            requireInteraction: false,
+            silent: false,
+          },
           fcmOptions: { link: input.data.route || "/" },
         },
       });
@@ -548,7 +559,7 @@ export async function processNotificationEvent(input: NotificationInput) {
 async function allowedDevicesFor(userId: string) {
   const setting = await NotificationDeviceSetting.findOne({ userId }).lean();
   const count = Number(setting?.allowedDevicesCount || 1);
-  return Math.min(2, Math.max(1, Number.isFinite(count) ? Math.trunc(count) : 1));
+  return Math.min(1, Math.max(1, Number.isFinite(count) ? Math.trunc(count) : 1));
 }
 
 export async function registerNotificationToken(input: {
@@ -612,7 +623,7 @@ export async function removeNotificationToken(input: { userId?: string; token: s
 
 export async function updateDeviceSetting(input: { userId: string; allowedDevicesCount: number }) {
   const userId = (await resolveUserIds([input.userId]))[0] || input.userId;
-  const allowedDevicesCount = Math.min(2, Math.max(1, Math.trunc(Number(input.allowedDevicesCount || 1))));
+  const allowedDevicesCount = Math.min(1, Math.max(1, Math.trunc(Number(input.allowedDevicesCount || 1))));
   await NotificationDeviceSetting.updateOne(
     { userId },
     { $set: { userId, allowedDevicesCount } },

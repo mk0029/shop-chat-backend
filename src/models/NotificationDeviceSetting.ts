@@ -3,7 +3,7 @@ import mongoose, { Schema, type InferSchemaType } from "mongoose";
 const NotificationDeviceSettingSchema = new Schema(
   {
     userId: { type: String, required: true, unique: true, index: true },
-    allowedDevicesCount: { type: Number, default: 1, min: 1, max: 2 },
+    allowedDevicesCount: { type: Number, default: 1, min: 1, max: 1 },
   },
   { timestamps: true },
 );

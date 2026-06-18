@@ -85,9 +85,17 @@ export async function refreshRoomSupportRoster(room: RoomDoc): Promise<RoomDoc> 
     { userId: String((room as any).customerId), role: "customer", name: String((room as any).customerName || "Customer") },
     ...admins.filter((admin) => admin.userId !== String((room as any).customerId)),
   ];
+  const sameParticipants = JSON.stringify((room as any).participants || []) === JSON.stringify(participants);
+  const sameAdmins = JSON.stringify((room as any).admins || []) === JSON.stringify(admins);
   (room as any).admins = admins;
   (room as any).participants = participants;
-  await (room as any).save();
+  if (!sameParticipants || !sameAdmins) {
+    await Room.updateOne(
+      { _id: (room as any)._id },
+      { $set: { admins, participants } },
+      { timestamps: false },
+    );
+  }
   return room;
 }
 

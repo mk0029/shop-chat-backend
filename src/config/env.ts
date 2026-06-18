@@ -22,6 +22,7 @@ export const env = {
   notificationGreetingTimezone: process.env.NOTIFICATION_GREETING_TIMEZONE || "Asia/Kolkata",
   notificationGreetingHour: Math.max(0, Math.min(23, Number(process.env.NOTIFICATION_GREETING_HOUR || 8))),
   notificationGreetingMinute: Math.max(0, Math.min(59, Number(process.env.NOTIFICATION_GREETING_MINUTE || 0))),
+  notificationGreetingWindowMinutes: Math.max(1, Math.min(60, Number(process.env.NOTIFICATION_GREETING_WINDOW_MINUTES || 5))),
   holidayCalendarApiUrl: process.env.HOLIDAY_CALENDAR_API_URL || "",
   holidayCalendarApiKey: process.env.HOLIDAY_CALENDAR_API_KEY || process.env.CALENDARIFIC_API_KEY || "",
   holidayCalendarCountry: process.env.HOLIDAY_CALENDAR_COUNTRY || "IN",

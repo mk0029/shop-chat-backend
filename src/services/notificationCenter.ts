@@ -88,6 +88,16 @@ function unique(values: Array<string | undefined | null>) {
   return Array.from(new Set(values.map((value) => String(value || "").trim()).filter(Boolean)));
 }
 
+function cleanDisplayName(value: unknown, fallback = "there") {
+  const cleaned = String(value || "")
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\[[^\]]*\]/g, " ")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned || fallback;
+}
+
 function normalizeEventType(type: string): NotificationEventType {
   const raw = String(type || "system.general").trim();
   if (LEGACY_TYPE_MAP[raw]) return LEGACY_TYPE_MAP[raw];
@@ -187,7 +197,7 @@ async function getRegisteredAudienceUsers(audience: "admins" | "all" | "customer
   return tokens
     .map((token) => ({
       userId: String(token.userId || "").trim(),
-      displayName: String(token.displayName || "").trim(),
+      displayName: cleanDisplayName(token.displayName, ""),
     }))
     .filter((token) => {
       if (!token.userId || seen.has(token.userId)) return false;
@@ -258,11 +268,11 @@ async function targetsFor(input: NotificationInput, normalizedEventType: Notific
     return users
       .filter((user) => user.userId !== actorUserId)
       .map((user) => {
-        const name = user.displayName || "there";
+        const name = cleanDisplayName(user.displayName, "there");
         return {
           userId: user.userId,
-          title: `Good morning, ${name}`,
-          body: `Good morning, ${name}. Have a great day from Jambh Electrics.`,
+          title: `Good morning ${name}`,
+          body: `Good morning ${name}. Have a great day from Jambh Electrics.`,
           data: { ...data, greetingName: name },
         };
       });

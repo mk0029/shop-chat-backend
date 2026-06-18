@@ -41,7 +41,9 @@ async function tick() {
   const { hour, minute } = localTimeParts();
   const nowMinutes = hour * 60 + minute;
   const greetingMinutes = env.notificationGreetingHour * 60 + env.notificationGreetingMinute;
-  const isGreetingDue = nowMinutes >= greetingMinutes;
+  const isGreetingDue =
+    nowMinutes >= greetingMinutes &&
+    nowMinutes < greetingMinutes + env.notificationGreetingWindowMinutes;
   if (!isGreetingDue) return;
 
   await sendOnce(`daily_good_morning:${dateKey}`, {
@@ -62,6 +64,7 @@ export function startNotificationScheduler() {
     timezone: env.notificationGreetingTimezone,
     hour: env.notificationGreetingHour,
     minute: env.notificationGreetingMinute,
+    windowMinutes: env.notificationGreetingWindowMinutes,
     dailyGoodMorning: true,
     festivalGreetings: false,
   });

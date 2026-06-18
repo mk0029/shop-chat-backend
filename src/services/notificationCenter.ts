@@ -610,7 +610,7 @@ export async function registerNotificationToken(input: {
       { _id: old._id },
       { $set: { isActive: false, deactivatedAt: now, deactivatedReason: "DEVICE_LIMIT_EXCEEDED" } },
     );
-    if (old.deviceId) {
+    if (old.deviceId && old.deviceId !== input.deviceId) {
       emitDeviceRevoked({
         userId,
         deviceId: old.deviceId,

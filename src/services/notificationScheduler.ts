@@ -1,5 +1,5 @@
 import { env } from "../config/env";
-import { processNotificationEvent } from "./notificationCenter";
+import { createAndDispatchNotification } from "./notificationCenter";
 
 let schedulerStarted = false;
 let timer: NodeJS.Timeout | null = null;
@@ -27,10 +27,14 @@ function localTimeParts(date = new Date()) {
   };
 }
 
-async function sendOnce(key: string, input: Parameters<typeof processNotificationEvent>[0]) {
-  if (sentInProcess.has(key)) return;
+async function sendOnce(key: string, input: Parameters<typeof createAndDispatchNotification>[0]) {
+  if (sentInProcess.has(key)) {
+    console.log("[notifications] scheduler skipped in-process duplicate", { key });
+    return;
+  }
   sentInProcess.add(key);
-  await processNotificationEvent(input).catch((error) => {
+  console.log("[notifications] scheduler dispatch", { key, eventType: input.eventType || input.type, eventId: input.eventId });
+  await createAndDispatchNotification(input).catch((error) => {
     sentInProcess.delete(key);
     console.warn("[notifications] scheduled send failed", error instanceof Error ? error.message : error);
   });
@@ -44,6 +48,13 @@ async function tick() {
   const isGreetingDue =
     nowMinutes >= greetingMinutes &&
     nowMinutes < greetingMinutes + env.notificationGreetingWindowMinutes;
+  console.log("[notifications] scheduler tick", {
+    dateKey,
+    nowMinutes,
+    greetingMinutes,
+    windowMinutes: env.notificationGreetingWindowMinutes,
+    isGreetingDue,
+  });
   if (!isGreetingDue) return;
 
   await sendOnce(`daily_good_morning:${dateKey}`, {

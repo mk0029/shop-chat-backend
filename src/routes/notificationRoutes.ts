@@ -5,7 +5,7 @@ import { requireShopAuth, type AuthRequest } from "../middleware/auth";
 import { NotificationLog } from "../models/NotificationLog";
 import { FcmToken } from "../models/FcmToken";
 import {
-  processNotificationEvent,
+  createAndDispatchNotification,
   registerNotificationToken,
   removeNotificationToken,
   updateDeviceSetting,
@@ -119,7 +119,7 @@ router.post("/remove-token", requireNotificationAccess, async (req: AuthRequest,
 
 router.post("/emit", requireNotificationAccess, async (req: AuthRequest, res, next) => {
   try {
-    const result = await processNotificationEvent(req.body || {});
+    const result = await createAndDispatchNotification(req.body || {});
     res.json({ success: result.ok, ...result });
   } catch (error) {
     next(error);
@@ -129,7 +129,7 @@ router.post("/emit", requireNotificationAccess, async (req: AuthRequest, res, ne
 router.post("/test-send", requireNotificationAccess, async (req: AuthRequest, res, next) => {
   try {
     const body = req.body || {};
-    const result = await processNotificationEvent({
+    const result = await createAndDispatchNotification({
       eventType: body.eventType || "system.general",
       eventId: body.eventId || `test.${Date.now()}`,
       actorUserId: req.shopUser?.id || body.actorUserId || "system",

@@ -25,6 +25,7 @@ const NotificationLogSchema = new Schema(
     skippedReason: { type: String, default: "" },
     eventId: { type: String, required: true, index: true },
     idempotencyKey: { type: String, required: true, unique: true, index: true },
+    dedupeKey: { type: String, index: true, sparse: true },
     payload: { type: Schema.Types.Mixed, default: {} },
     deliveries: { type: [DeliverySchema], default: [] },
     sentAt: { type: Date, default: null },
@@ -33,6 +34,7 @@ const NotificationLogSchema = new Schema(
 );
 
 NotificationLogSchema.index({ createdAt: -1 });
+NotificationLogSchema.index({ dedupeKey: 1 }, { unique: true, sparse: true });
 
 export type NotificationLogDoc = InferSchemaType<typeof NotificationLogSchema> & { _id: mongoose.Types.ObjectId };
 export const NotificationLog = mongoose.model("NotificationLog", NotificationLogSchema);

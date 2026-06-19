@@ -301,10 +301,12 @@ function dataPayload(args: {
   receiverUserId: string;
   actorUserId: string;
   data: Record<string, any>;
+  dedupeKey?: string;
 }) {
   return {
     type: args.type,
     eventId: args.eventId,
+    dedupeKey: args.dedupeKey || String(args.data.dedupeKey || ""),
     userId: args.receiverUserId,
     actorId: args.actorUserId,
     roomId: String(args.data.roomId || ""),
@@ -316,6 +318,91 @@ function dataPayload(args: {
     route: String(args.data.route || args.data.route_path || ""),
     createdAt: new Date().toISOString(),
   };
+}
+
+function dailyGreetingDate(input: NotificationInput, eventId: string) {
+  const data = input.data || {};
+  const explicit = String(data.greetingDate || data.date || "").trim();
+  if (explicit) return explicit;
+  const match = String(eventId || "").match(/(\d{4}-\d{2}-\d{2})$/);
+  if (match?.[1]) return match[1];
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: env.notificationGreetingTimezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function safeKeyPart(value: unknown, fallback = "none") {
+  const cleaned = String(value || "")
+    .trim()
+    .replace(/[:\s]+/g, "-")
+    .replace(/[^a-zA-Z0-9_.-]/g, "")
+    .slice(0, 96);
+  return cleaned || fallback;
+}
+
+function bucketFor(input: NotificationInput, normalizedEventType: NotificationEventType, eventId: string) {
+  const data = input.data || {};
+  const explicit =
+    data.greetingDate ||
+    data.festivalDate ||
+    data.date ||
+    data.localDate ||
+    data.day ||
+    data.createdAt ||
+    data.updatedAt;
+  const explicitText = String(explicit || "").trim();
+  const dateMatch = explicitText.match(/\d{4}-\d{2}-\d{2}/)?.[0];
+  if (dateMatch) return dateMatch;
+  if (
+    normalizedEventType === "scheduled.dailyGreeting" ||
+    normalizedEventType === "daily_good_morning" ||
+    normalizedEventType === "scheduled.festivalGreeting" ||
+    normalizedEventType === "hindu_festival_greeting"
+  ) {
+    return dailyGreetingDate(input, eventId);
+  }
+  return String(Math.floor(Date.now() / 60_000));
+}
+
+function entityIdFor(input: NotificationInput, eventId: string) {
+  const data = input.data || {};
+  return (
+    data.entityId ||
+    data.sourceId ||
+    data.messageId ||
+    data.billMessageId ||
+    data.billId ||
+    data.workId ||
+    data.taskId ||
+    data.toolRentId ||
+    data.rentalId ||
+    data.requestId ||
+    data.offerId ||
+    data.roomId ||
+    data.campaignId ||
+    data.notificationId ||
+    data.id ||
+    eventId
+  );
+}
+
+function dedupeKeyFor(input: {
+  normalizedEventType: NotificationEventType;
+  receiverUserId: string;
+  eventId: string;
+  input: NotificationInput;
+}) {
+  const explicit = String(input.input.data?.dedupeKey || "").trim();
+  if (explicit) return explicit;
+  return [
+    safeKeyPart(input.normalizedEventType, "system.general"),
+    safeKeyPart(input.receiverUserId, "user"),
+    safeKeyPart(entityIdFor(input.input, input.eventId), "source"),
+    safeKeyPart(bucketFor(input.input, input.normalizedEventType, input.eventId), "bucket"),
+  ].join(":");
 }
 
 function isInvalidTokenError(error: any) {
@@ -344,7 +431,12 @@ async function sendToToken(input: {
     body: input.body,
     notificationTitle: input.title,
     notificationBody: input.body,
+    icon: String(input.data.icon || "/je-p-192.png"),
+    badge: String(input.data.badge || "/je-p-48.png"),
+    click_action: String(input.data.click_action || input.data.route || "/"),
   };
+  const isDailyGreeting = input.data.type === "daily_good_morning" || input.data.type === "scheduled.dailyGreeting";
+  const androidChannelId = isDailyGreeting ? "daily-greetings" : env.fcmAndroidChannelId;
   let lastError = "";
   for (let attempt = 1; attempt <= env.notificationRetryAttempts; attempt += 1) {
     try {
@@ -356,9 +448,10 @@ async function sendToToken(input: {
           notification: {
             title: input.title,
             body: input.body,
-            channelId: env.fcmAndroidChannelId,
-            priority: "high",
-            defaultSound: true,
+            channelId: androidChannelId,
+            sound: "default",
+            visibility: "public",
+            clickAction: messageData.click_action,
           },
         },
         apns: {
@@ -372,17 +465,6 @@ async function sendToToken(input: {
         },
         webpush: {
           headers: { Urgency: "high" },
-          notification: {
-            title: input.title,
-            body: input.body,
-            icon: String(input.data.icon || "/je-p-192.png"),
-            badge: String(input.data.badge || "/je-p-48.png"),
-            image: input.data.image || input.data.imageUrl ? String(input.data.image || input.data.imageUrl) : undefined,
-            tag: String(input.data.tag || input.data.id || input.data.eventId || input.data.type || "app-notification"),
-            renotify: true,
-            requireInteraction: false,
-            silent: false,
-          },
           fcmOptions: { link: input.data.route || "/" },
         },
       });
@@ -409,11 +491,12 @@ async function createSkippedLog(input: {
   receiverUserId: string;
   actorUserId: string;
   eventId: string;
+  dedupeKey?: string;
   reason: string;
   payload: Record<string, any>;
 }) {
   await NotificationLog.updateOne(
-    { idempotencyKey: `${input.eventId}:${input.receiverUserId}` },
+    { idempotencyKey: input.dedupeKey || `${input.eventId}:${input.receiverUserId}` },
     {
       $setOnInsert: {
         eventType: input.eventType,
@@ -421,7 +504,8 @@ async function createSkippedLog(input: {
         receiverUserId: input.receiverUserId,
         actorUserId: input.actorUserId,
         eventId: input.eventId,
-        idempotencyKey: `${input.eventId}:${input.receiverUserId}`,
+        idempotencyKey: input.dedupeKey || `${input.eventId}:${input.receiverUserId}`,
+        ...(input.dedupeKey ? { dedupeKey: input.dedupeKey } : {}),
         payload: input.payload,
         status: "skipped",
         skippedReason: input.reason,
@@ -432,7 +516,7 @@ async function createSkippedLog(input: {
   console.log("[notifications] skipped", input.reason, input.receiverUserId);
 }
 
-export async function processNotificationEvent(input: NotificationInput) {
+export async function createAndDispatchNotification(input: NotificationInput) {
   const eventType = String(input.eventType || input.type || "system.general");
   const normalizedEventType = normalizeEventType(eventType);
   const actorUserId = String(input.actorUserId || input.actorId || input.data?.actorId || input.data?.actorUserId || "").trim();
@@ -440,7 +524,7 @@ export async function processNotificationEvent(input: NotificationInput) {
   console.log("[notifications] event received", { eventType, eventId });
   console.log("[notifications] event normalized", { eventType, normalizedEventType });
   const targets = await targetsFor(input, normalizedEventType);
-  console.log("[notifications] target users resolved", targets.map((target) => target.userId));
+  console.log("[notifications] users selected", targets.map((target) => target.userId));
 
   let deliverableTargets = targets;
   let skippedUnregistered = 0;
@@ -459,34 +543,38 @@ export async function processNotificationEvent(input: NotificationInput) {
 
   const results = [];
   for (const target of deliverableTargets) {
+    const dedupeKey = dedupeKeyFor({ normalizedEventType, receiverUserId: target.userId, eventId, input });
+    if (dedupeKey) console.log("[notifications] dedupe key generated", { userId: target.userId, dedupeKey });
     const payload = dataPayload({
       type: normalizedEventType,
       eventId,
       receiverUserId: target.userId,
       actorUserId,
       data: target.data,
+      dedupeKey,
     });
     if (target.userId === actorUserId) {
       console.log("[notifications] sender skipped", target.userId);
-      await createSkippedLog({ eventType, normalizedEventType, receiverUserId: target.userId, actorUserId, eventId, reason: "sender", payload });
+      await createSkippedLog({ eventType, normalizedEventType, receiverUserId: target.userId, actorUserId, eventId, dedupeKey, reason: "sender", payload });
       results.push({ userId: target.userId, status: "skipped", reason: "sender" });
       continue;
     }
     if (normalizedEventType === "chat.message.created" && payload.roomId && isUserActiveInChatRoom(target.userId, payload.roomId)) {
       console.log("[notifications] receiver skipped because active in same chat", target.userId, payload.roomId);
-      await createSkippedLog({ eventType, normalizedEventType, receiverUserId: target.userId, actorUserId, eventId, reason: "active_same_chat", payload });
+      await createSkippedLog({ eventType, normalizedEventType, receiverUserId: target.userId, actorUserId, eventId, dedupeKey, reason: "active_same_chat", payload });
       results.push({ userId: target.userId, status: "skipped", reason: "active_same_chat" });
       continue;
     }
     const tokens = await FcmToken.find({ userId: target.userId, isActive: true }).sort({ updatedAt: -1 });
+    console.log("[notifications] token count per user", { userId: target.userId, tokenCount: tokens.length });
     if (!tokens.length) {
       console.log("[notifications] token missing", target.userId);
-      await createSkippedLog({ eventType, normalizedEventType, receiverUserId: target.userId, actorUserId, eventId, reason: "token_missing", payload });
+      await createSkippedLog({ eventType, normalizedEventType, receiverUserId: target.userId, actorUserId, eventId, dedupeKey, reason: "token_missing", payload });
       results.push({ userId: target.userId, status: "skipped", reason: "token_missing" });
       continue;
     }
     const log = await NotificationLog.findOneAndUpdate(
-      { idempotencyKey: `${eventId}:${target.userId}` },
+      { idempotencyKey: dedupeKey || `${eventId}:${target.userId}` },
       {
         $setOnInsert: {
           eventType,
@@ -494,7 +582,8 @@ export async function processNotificationEvent(input: NotificationInput) {
           receiverUserId: target.userId,
           actorUserId,
           eventId,
-          idempotencyKey: `${eventId}:${target.userId}`,
+          idempotencyKey: dedupeKey || `${eventId}:${target.userId}`,
+          ...(dedupeKey ? { dedupeKey } : {}),
           payload,
           status: "pending",
         },
@@ -503,6 +592,7 @@ export async function processNotificationEvent(input: NotificationInput) {
     );
     const doc = (log as any).value || log;
     if ((log as any).lastErrorObject?.updatedExisting && doc?.status === "sent") {
+      console.log("[notifications] skipped duplicate", { userId: target.userId, dedupeKey: dedupeKey || `${eventId}:${target.userId}` });
       results.push({ userId: target.userId, status: "skipped", reason: "duplicate" });
       continue;
     }
@@ -517,13 +607,14 @@ export async function processNotificationEvent(input: NotificationInput) {
         data: payload,
       });
       if (send.ok) {
-        console.log("[notifications] FCM sent", { userId: target.userId, tokenId: token._id });
+        console.log("[notifications] FCM send success", { userId: target.userId, tokenId: token._id, dedupeKey });
         sent += 1;
       } else {
-        console.warn(send.invalid ? "[notifications] token invalid" : "[notifications] FCM failed", {
+        console.warn(send.invalid ? "[notifications] token invalid" : "[notifications] FCM send failure", {
           userId: target.userId,
           tokenId: token._id,
           error: send.error,
+          dedupeKey,
         });
       }
       deliveries.push({
@@ -539,7 +630,7 @@ export async function processNotificationEvent(input: NotificationInput) {
     const status = sent > 0 ? "sent" : "failed";
     const failureReason = sent > 0 ? "" : deliveries.map((delivery) => delivery.failureReason).filter(Boolean).join(" | ");
     await NotificationLog.updateOne(
-      { idempotencyKey: `${eventId}:${target.userId}` },
+      { idempotencyKey: dedupeKey || `${eventId}:${target.userId}` },
       {
         $set: {
           status,
@@ -564,6 +655,10 @@ export async function processNotificationEvent(input: NotificationInput) {
   }
 
   return { ok: true, eventId, eventType, normalizedEventType, skippedUnregistered, results };
+}
+
+export async function processNotificationEvent(input: NotificationInput) {
+  return createAndDispatchNotification(input);
 }
 
 async function allowedDevicesFor(userId: string) {

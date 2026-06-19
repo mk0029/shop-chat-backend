@@ -1,7 +1,7 @@
 import type { MessageDoc } from "../models/Message";
 import type { RoomDoc } from "../models/Room";
 import type { ShopUser } from "../types/auth";
-import { processNotificationEvent } from "./notificationCenter";
+import { createAndDispatchNotification } from "./notificationCenter";
 
 function messagePreview(text: string, type?: string) {
   if (type === "text") {
@@ -33,7 +33,7 @@ export async function notifyChatMessageCreated(input: {
     const targetUserIds = isCustomerSender ? adminIds : supportToCustomerIds;
     if (!targetUserIds.length) return;
 
-    await processNotificationEvent({
+    await createAndDispatchNotification({
       eventId: `chat.message.created.${String(message._id)}`,
       eventType: "chat.message.created",
       actorUserId: sender.id,

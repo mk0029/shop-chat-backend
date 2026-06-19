@@ -91,8 +91,21 @@ function unique(values: Array<string | undefined | null>) {
 function cleanDisplayName(value: unknown, fallback = "there") {
   const cleaned = String(value || "")
     .replace(/\([^)]*\)/g, " ")
+    .replace(/\{[^}]*\}/g, " ")
     .replace(/\[[^\]]*\]/g, " ")
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned || fallback;
+}
+
+function cleanNotificationText(value: unknown, fallback: string) {
+  const cleaned = String(value || "")
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\{[^}]*\}/g, " ")
+    .replace(/\[[^\]]*\]/g, " ")
+    .replace(/["'`<>]/g, " ")
+    .replace(/[^\p{L}\p{N}\s.,!?₹$%&:/+-]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
   return cleaned || fallback;
@@ -207,12 +220,15 @@ async function getRegisteredAudienceUsers(audience: "admins" | "all" | "customer
 }
 
 function defaultTitleBody(type: NotificationEventType, data: Record<string, any>, input: NotificationInput, receiverUserId: string) {
-  const title = String(input.title || "").trim();
-  const body = String(input.body || "").trim();
+  const title = cleanNotificationText(input.title, "");
+  const body = cleanNotificationText(input.body, "");
   if (title && body) return { title, body };
-  const customerName = String(data.customerName || "customer");
+  const customerName = cleanDisplayName(data.customerName, "customer");
   if (type === "chat.message.created") {
-    return { title: `Message from ${data.senderName || "Shop"}`, body: String(data.preview || data.text || "New message") };
+    return {
+      title: `Message from ${cleanDisplayName(data.senderName, "Shop")}`,
+      body: cleanNotificationText(data.preview || data.text, "New message"),
+    };
   }
   if (type === "bill_created" || type === "billing.created" || type === "bill.message.created") {
     const isCustomer = String(data.customerId || "") === receiverUserId;
@@ -223,12 +239,12 @@ function defaultTitleBody(type: NotificationEventType, data: Record<string, any>
   }
   if (type === "admin_bill_created") return { title: "New bill created", body: `New bill created for ${customerName}.` };
   if (type === "billing.updated") return { title: "Bill updated", body: "A bill has been updated." };
-  if (type.startsWith("workTask.")) return { title: "Work task update", body: String(data.title || data.message || "A work task was updated.") };
-  if (type.startsWith("toolRent.")) return { title: "Tool rent update", body: String(data.title || data.message || "Tool rent update.") };
+  if (type.startsWith("workTask.")) return { title: "Work task update", body: cleanNotificationText(data.title || data.message, "A work task was updated.") };
+  if (type.startsWith("toolRent.")) return { title: "Tool rent update", body: cleanNotificationText(data.title || data.message, "Tool rent update.") };
   if (type.includes("Greeting") || type.includes("good_morning") || type.includes("festival")) {
     return { title: title || "Greetings", body: body || "Best wishes from Jambh Electrics." };
   }
-  return { title: title || "Notification", body: body || String(data.message || "You have a new notification.") };
+  return { title: title || "Notification", body: body || cleanNotificationText(data.message, "You have a new notification.") };
 }
 
 async function targetsFor(input: NotificationInput, normalizedEventType: NotificationEventType): Promise<Target[]> {
@@ -425,12 +441,14 @@ async function sendToToken(input: {
 }) {
   const messaging = getFirebaseMessaging();
   if (!messaging) return { ok: false, error: "Firebase Admin is not configured" };
+  const title = cleanNotificationText(input.title, "Notification");
+  const body = cleanNotificationText(input.body, "You have a new update.");
   const messageData: Record<string, string> = {
     ...input.data,
-    title: input.title,
-    body: input.body,
-    notificationTitle: input.title,
-    notificationBody: input.body,
+    title,
+    body,
+    notificationTitle: title,
+    notificationBody: body,
     icon: String(input.data.icon || "/je-p-192.png"),
     badge: String(input.data.badge || "/je-p-48.png"),
     click_action: String(input.data.click_action || input.data.route || "/"),
@@ -446,8 +464,8 @@ async function sendToToken(input: {
         android: {
           priority: "high",
           notification: {
-            title: input.title,
-            body: input.body,
+            title,
+            body,
             channelId: androidChannelId,
             sound: "default",
             visibility: "public",
@@ -457,7 +475,7 @@ async function sendToToken(input: {
         apns: {
           payload: {
             aps: {
-              alert: { title: input.title, body: input.body },
+              alert: { title, body },
               sound: "default",
               contentAvailable: true,
             },

@@ -27,6 +27,14 @@ function localTimeParts(date = new Date()) {
   };
 }
 
+function greetingWindowMinutes() {
+  const start = env.notificationGreetingHour * 60 + env.notificationGreetingMinute;
+  const configuredEnd = env.notificationGreetingEndHour * 60 + env.notificationGreetingEndMinute;
+  const fallbackEnd = start + env.notificationGreetingWindowMinutes;
+  const end = configuredEnd > start ? configuredEnd : fallbackEnd;
+  return { start, end };
+}
+
 async function sendOnce(key: string, input: Parameters<typeof createAndDispatchNotification>[0]) {
   if (sentInProcess.has(key)) {
     console.log("[notifications] scheduler skipped in-process duplicate", { key });
@@ -44,20 +52,22 @@ async function tick() {
   const dateKey = indianDateKey();
   const { hour, minute } = localTimeParts();
   const nowMinutes = hour * 60 + minute;
-  const greetingMinutes = env.notificationGreetingHour * 60 + env.notificationGreetingMinute;
-  const isGreetingDue =
-    nowMinutes >= greetingMinutes &&
-    nowMinutes < greetingMinutes + env.notificationGreetingWindowMinutes;
+  const { start: greetingMinutes, end: greetingEndMinutes } = greetingWindowMinutes();
+  const isGreetingDue = nowMinutes >= greetingMinutes && nowMinutes < greetingEndMinutes;
+  if (!isGreetingDue) return;
+
+  const greetingKey = `daily_good_morning:${dateKey}`;
+  if (sentInProcess.has(greetingKey)) return;
+
   console.log("[notifications] scheduler tick", {
     dateKey,
     nowMinutes,
     greetingMinutes,
-    windowMinutes: env.notificationGreetingWindowMinutes,
+    greetingEndMinutes,
     isGreetingDue,
   });
-  if (!isGreetingDue) return;
 
-  await sendOnce(`daily_good_morning:${dateKey}`, {
+  await sendOnce(greetingKey, {
     eventType: "daily_good_morning",
     eventId: `daily_good_morning.${dateKey}`,
     actorUserId: "system",
@@ -68,6 +78,7 @@ async function tick() {
 export function startNotificationScheduler() {
   if (schedulerStarted || !env.enableNotificationCron) return;
   schedulerStarted = true;
+  const { start, end } = greetingWindowMinutes();
   void tick();
   timer = setInterval(() => void tick(), 60 * 1000);
   timer.unref?.();
@@ -75,7 +86,8 @@ export function startNotificationScheduler() {
     timezone: env.notificationGreetingTimezone,
     hour: env.notificationGreetingHour,
     minute: env.notificationGreetingMinute,
-    windowMinutes: env.notificationGreetingWindowMinutes,
+    startMinutes: start,
+    endMinutes: end,
     dailyGoodMorning: true,
     festivalGreetings: false,
   });

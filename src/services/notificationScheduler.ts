@@ -1,5 +1,6 @@
 import { env } from "../config/env";
-import { createAndDispatchNotification } from "./notificationCenter";
+import { dispatchNotificationBackground } from "./notificationDispatcher";
+import { notificationLogger } from "../lib/notificationLogger";
 
 let schedulerStarted = false;
 let timer: NodeJS.Timeout | null = null;
@@ -35,20 +36,21 @@ function greetingWindowMinutes() {
   return { start, end };
 }
 
-async function sendOnce(key: string, input: Parameters<typeof createAndDispatchNotification>[0]) {
+function sendOnce(key: string, input: Parameters<typeof dispatchNotificationBackground>[0]) {
   if (sentInProcess.has(key)) {
-    console.log("[notifications] scheduler skipped in-process duplicate", { key });
+    notificationLogger.notificationSkipped(
+      input.eventId || key,
+      "all",
+      "scheduler_in_process_duplicate",
+    );
     return;
   }
   sentInProcess.add(key);
-  console.log("[notifications] scheduler dispatch", { key, eventType: input.eventType || input.type, eventId: input.eventId });
-  await createAndDispatchNotification(input).catch((error) => {
-    sentInProcess.delete(key);
-    console.warn("[notifications] scheduled send failed", error instanceof Error ? error.message : error);
-  });
+  notificationLogger.eventCreated(input.eventId || key, input.eventType || "unknown", { schedulerKey: key });
+  dispatchNotificationBackground(input);
 }
 
-async function tick() {
+function tick() {
   const dateKey = indianDateKey();
   const { hour, minute } = localTimeParts();
   const nowMinutes = hour * 60 + minute;
@@ -59,15 +61,14 @@ async function tick() {
   const greetingKey = `daily_good_morning:${dateKey}`;
   if (sentInProcess.has(greetingKey)) return;
 
-  console.log("[notifications] scheduler tick", {
+  notificationLogger.eventCreated(`daily_good_morning.${dateKey}`, "daily_good_morning", {
     dateKey,
     nowMinutes,
     greetingMinutes,
     greetingEndMinutes,
-    isGreetingDue,
   });
 
-  await sendOnce(greetingKey, {
+  sendOnce(greetingKey, {
     eventType: "daily_good_morning",
     eventId: `daily_good_morning.${dateKey}`,
     actorUserId: "system",

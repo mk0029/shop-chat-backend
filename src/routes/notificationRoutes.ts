@@ -10,6 +10,8 @@ import {
   removeNotificationToken,
   updateDeviceSetting,
 } from "../services/notificationCenter";
+import { dispatchNotificationBackground, getNotificationQueueStats } from "../services/notificationDispatcher";
+import { notificationLogger } from "../lib/notificationLogger";
 
 const router = Router();
 
@@ -119,8 +121,8 @@ router.post("/remove-token", requireNotificationAccess, async (req: AuthRequest,
 
 router.post("/emit", requireNotificationAccess, async (req: AuthRequest, res, next) => {
   try {
-    const result = await createAndDispatchNotification(req.body || {});
-    res.json({ success: result.ok, ...result });
+    dispatchNotificationBackground(req.body || {});
+    res.json({ success: true, queued: true, message: "Notification queued for background processing" });
   } catch (error) {
     next(error);
   }
@@ -171,6 +173,25 @@ router.patch("/users/notification-device-setting", requireNotificationAccess, as
       .parse(req.body || {});
     const result = await updateDeviceSetting(input);
     res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/queue/stats", requireNotificationAccess, async (_req: AuthRequest, res, next) => {
+  try {
+    const stats = getNotificationQueueStats();
+    res.json({ success: true, stats });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/logs/recent", requireNotificationAccess, async (req: AuthRequest, res, next) => {
+  try {
+    const count = Math.max(1, Math.min(200, Number(req.query.count || 50)));
+    const logs = notificationLogger.getRecentLogs(count);
+    res.json({ success: true, logs });
   } catch (error) {
     next(error);
   }

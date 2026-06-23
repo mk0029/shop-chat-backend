@@ -5,10 +5,15 @@ import { connectDb } from "./config/db";
 import { env, validateEnv } from "./config/env";
 import { registerChatSocket } from "./sockets/chatSocket";
 import { startNotificationScheduler } from "./services/notificationScheduler";
+import { startNotificationQueue, stopNotificationQueue } from "./services/notificationQueue";
+import { notificationLogger } from "./lib/notificationLogger";
 
 async function main() {
   validateEnv();
   await connectDb();
+
+  startNotificationQueue({ concurrency: 5, defaultMaxRetries: 3, defaultTimeoutMs: 20_000 });
+  notificationLogger.startPeriodicFlush();
 
   const server = http.createServer(app);
   const io = new Server(server, {
@@ -25,6 +30,16 @@ async function main() {
   server.listen(env.port, () => {
     console.log(`[shop-chat] listening on ${env.port}`);
   });
+
+  const shutdown = () => {
+    console.log("[shop-chat] shutting down...");
+    stopNotificationQueue();
+    notificationLogger.stopPeriodicFlush();
+    io.close();
+    server.close(() => process.exit(0));
+  };
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
 }
 
 main().catch((error) => {

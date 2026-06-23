@@ -45,77 +45,89 @@ export function emitDeviceRevoked(input: {
   message?: string;
 }) {
   if (!chatNamespace || !input.userId) return false;
-  const payload = {
-    reason: input.reason || "LOGGED_IN_ON_ANOTHER_DEVICE",
-    deviceId: input.deviceId,
-    loggedInOn: input.loggedInOn,
-    message:
-      input.message ||
-      "Your account has been logged out from this device because it was logged in on another device.",
-    at: new Date().toISOString(),
-  };
-  if (input.deviceId) {
-    chatNamespace.to(deviceRoom(input.userId, input.deviceId)).emit("session:revoked", payload);
+  try {
+    const payload = {
+      reason: input.reason || "LOGGED_IN_ON_ANOTHER_DEVICE",
+      deviceId: input.deviceId,
+      loggedInOn: input.loggedInOn,
+      message:
+        input.message ||
+        "Your account has been logged out from this device because it was logged in on another device.",
+      at: new Date().toISOString(),
+    };
+    if (input.deviceId) {
+      chatNamespace.to(deviceRoom(input.userId, input.deviceId)).emit("session:revoked", payload);
+      return true;
+    }
+    chatNamespace.to(`user:${input.userId}`).emit("session:revoked", payload);
     return true;
+  } catch {
+    return false;
   }
-  chatNamespace.to(`user:${input.userId}`).emit("session:revoked", payload);
-  return true;
 }
 
 function emitPresence() {
-  pruneStalePresence(false);
-  const users = Array.from(onlineUsers.values()).map(({ user }) => ({
-    userId: user.id,
-    role: user.role,
-    name: user.name,
-    online: true,
-    lastSeen: lastSeenByUser.get(user.id) || new Date().toISOString(),
-  }));
-  const lastSeen = Array.from(lastSeenByUser.entries()).map(([userId, at]) => ({ userId, online: false, lastSeen: at }));
-  chatNamespace?.emit("presence:snapshot", { users, lastSeen });
+  try {
+    pruneStalePresence(false);
+    const users = Array.from(onlineUsers.values()).map(({ user }) => ({
+      userId: user.id,
+      role: user.role,
+      name: user.name,
+      online: true,
+      lastSeen: lastSeenByUser.get(user.id) || new Date().toISOString(),
+    }));
+    const lastSeen = Array.from(lastSeenByUser.entries()).map(([userId, at]) => ({ userId, online: false, lastSeen: at }));
+    chatNamespace?.emit("presence:snapshot", { users, lastSeen });
+  } catch {}
 }
 
 function touchPresence(socket: Socket, user: ShopUser) {
-  const previous = onlineUsers.get(user.id);
-  const sockets = previous?.sockets || new Map<string, string>();
-  const now = new Date().toISOString();
-  sockets.set(socket.id, now);
-  lastSeenByUser.set(user.id, now);
-  onlineUsers.set(user.id, { user, sockets });
+  try {
+    const previous = onlineUsers.get(user.id);
+    const sockets = previous?.sockets || new Map<string, string>();
+    const now = new Date().toISOString();
+    sockets.set(socket.id, now);
+    lastSeenByUser.set(user.id, now);
+    onlineUsers.set(user.id, { user, sockets });
+  } catch {}
 }
 
 function removePresence(socket: Socket, user: ShopUser) {
-  const previous = onlineUsers.get(user.id);
-  if (!previous) return;
-  previous.sockets.delete(socket.id);
-  if (previous.sockets.size === 0) {
-    onlineUsers.delete(user.id);
-    lastSeenByUser.set(user.id, new Date().toISOString());
-    return;
-  }
-  onlineUsers.set(user.id, previous);
+  try {
+    const previous = onlineUsers.get(user.id);
+    if (!previous) return;
+    previous.sockets.delete(socket.id);
+    if (previous.sockets.size === 0) {
+      onlineUsers.delete(user.id);
+      lastSeenByUser.set(user.id, new Date().toISOString());
+      return;
+    }
+    onlineUsers.set(user.id, previous);
+  } catch {}
 }
 
 function pruneStalePresence(shouldEmit = true) {
-  const cutoff = Date.now() - PRESENCE_TTL_MS;
-  let changed = false;
+  try {
+    const cutoff = Date.now() - PRESENCE_TTL_MS;
+    let changed = false;
 
-  for (const [userId, presence] of onlineUsers.entries()) {
-    for (const [socketId, lastSeen] of presence.sockets.entries()) {
-      const lastSeenTime = Date.parse(lastSeen);
-      if (!Number.isFinite(lastSeenTime) || lastSeenTime < cutoff) {
-        presence.sockets.delete(socketId);
-        changed = true;
+    for (const [userId, presence] of onlineUsers.entries()) {
+      for (const [socketId, lastSeen] of presence.sockets.entries()) {
+        const lastSeenTime = Date.parse(lastSeen);
+        if (!Number.isFinite(lastSeenTime) || lastSeenTime < cutoff) {
+          presence.sockets.delete(socketId);
+          changed = true;
+        }
+      }
+
+      if (presence.sockets.size === 0) {
+        onlineUsers.delete(userId);
+        lastSeenByUser.set(userId, new Date().toISOString());
       }
     }
 
-    if (presence.sockets.size === 0) {
-      onlineUsers.delete(userId);
-      lastSeenByUser.set(userId, new Date().toISOString());
-    }
-  }
-
-  if (changed && shouldEmit) emitPresence();
+    if (changed && shouldEmit) emitPresence();
+  } catch {}
 }
 
 function startPresencePruner() {
@@ -185,7 +197,9 @@ export function registerChatSocket(io: Server) {
         socket.join(`room:${room._id}`);
         socket.emit("room:joined", { room: serializeRoom(room) });
       } catch {
-        socket.emit("room:error", { roomId, message: "Unable to join room" });
+        try {
+          socket.emit("room:error", { roomId, message: "Unable to join room" });
+        } catch {}
       }
     });
 
@@ -264,9 +278,11 @@ export function registerChatSocket(io: Server) {
           const messagePayload = serializeMessage(message);
           const updatedRoom = await Room.findById(room._id).lean();
           const roomPayload = serializeRoom(updatedRoom);
-          chatNamespace?.to(`room:${room._id}`).emit("message:new", messagePayload);
-          chatNamespace?.to("admins").emit("room:updated", roomPayload);
-          chatNamespace?.to(`user:${room.customerId}`).emit("room:updated", roomPayload);
+          try {
+            chatNamespace?.to(`room:${room._id}`).emit("message:new", messagePayload);
+            chatNamespace?.to("admins").emit("room:updated", roomPayload);
+            chatNamespace?.to(`user:${room.customerId}`).emit("room:updated", roomPayload);
+          } catch {}
           void notifyChatMessageCreated({ room, message, sender: user });
           ack?.({ ok: true, message: messagePayload, room: roomPayload, clientMessageId: input.clientMessageId });
         } catch (error) {
@@ -279,22 +295,26 @@ export function registerChatSocket(io: Server) {
       if (!roomId) return;
       const room = await assertRoomAccess(user, roomId);
       if (!room) return;
-      socket.to(`room:${room._id}`).emit("typing:update", {
-        roomId: String(room._id),
-        userId: user.id,
-        role: user.role,
-        name: user.name,
-        typing: Boolean(typing),
-        at: new Date().toISOString(),
-      });
+      try {
+        socket.to(`room:${room._id}`).emit("typing:update", {
+          roomId: String(room._id),
+          userId: user.id,
+          role: user.role,
+          name: user.name,
+          typing: Boolean(typing),
+          at: new Date().toISOString(),
+        });
+      } catch {}
     });
 
     socket.on("message:delivered", async ({ messageIds }: { messageIds?: string[] }) => {
       const payload = await markDelivered(Array.isArray(messageIds) ? messageIds : [], user);
       const roomIds = Array.from(new Set(payload.map((message: any) => String(message.roomId))));
-      for (const roomId of roomIds) {
-        chatNamespace?.to(`room:${roomId}`).emit("message:status", { messages: payload.filter((m: any) => String(m.roomId) === roomId) });
-      }
+      try {
+        for (const roomId of roomIds) {
+          chatNamespace?.to(`room:${roomId}`).emit("message:status", { messages: payload.filter((m: any) => String(m.roomId) === roomId) });
+        }
+      } catch {}
     });
 
     socket.on("message:read", async ({ roomId, messageIds }: { roomId?: string; messageIds?: string[] }) => {
@@ -303,14 +323,16 @@ export function registerChatSocket(io: Server) {
       if (!room) return;
       const messages = await markRoomRead(room, user, Array.isArray(messageIds) ? messageIds : undefined);
       const updatedRoom = await Room.findById(room._id).lean();
-      chatNamespace?.to(`room:${room._id}`).emit("message:read", {
-        roomId: String(room._id),
-        userId: user.id,
-        messageIds: Array.isArray(messageIds) ? messageIds : [],
-      });
-      chatNamespace?.to(`room:${room._id}`).emit("message:status", { messages });
-      chatNamespace?.to("admins").emit("room:updated", serializeRoom(updatedRoom));
-      chatNamespace?.to(`user:${room.customerId}`).emit("room:updated", serializeRoom(updatedRoom));
+      try {
+        chatNamespace?.to(`room:${room._id}`).emit("message:read", {
+          roomId: String(room._id),
+          userId: user.id,
+          messageIds: Array.isArray(messageIds) ? messageIds : [],
+        });
+        chatNamespace?.to(`room:${room._id}`).emit("message:status", { messages });
+        chatNamespace?.to("admins").emit("room:updated", serializeRoom(updatedRoom));
+        chatNamespace?.to(`user:${room.customerId}`).emit("room:updated", serializeRoom(updatedRoom));
+      } catch {}
     });
 
     socket.on("disconnect", () => {

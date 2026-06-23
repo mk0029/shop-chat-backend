@@ -1,7 +1,8 @@
 import type { MessageDoc } from "../models/Message";
 import type { RoomDoc } from "../models/Room";
 import type { ShopUser } from "../types/auth";
-import { createAndDispatchNotification } from "./notificationCenter";
+import { dispatchNotificationBackground } from "./notificationDispatcher";
+import { notificationLogger } from "../lib/notificationLogger";
 
 function messagePreview(text: string, type?: string) {
   if (type === "text") {
@@ -11,7 +12,7 @@ function messagePreview(text: string, type?: string) {
   return `Sent a ${type === "file" ? "file" : type || "message"}`;
 }
 
-export async function notifyChatMessageCreated(input: {
+export function notifyChatMessageCreated(input: {
   room: RoomDoc;
   message: MessageDoc;
   sender: ShopUser;
@@ -33,8 +34,15 @@ export async function notifyChatMessageCreated(input: {
     const targetUserIds = isCustomerSender ? adminIds : supportToCustomerIds;
     if (!targetUserIds.length) return;
 
-    await createAndDispatchNotification({
-      eventId: `chat.message.created.${String(message._id)}`,
+    const eventId = `chat.message.created.${String(message._id)}`;
+    notificationLogger.eventCreated(eventId, "chat.message.created", {
+      roomId: String(room._id),
+      senderId: sender.id,
+      targetCount: targetUserIds.length,
+    });
+
+    dispatchNotificationBackground({
+      eventId,
       eventType: "chat.message.created",
       actorUserId: sender.id,
       userIds: targetUserIds,
@@ -53,6 +61,10 @@ export async function notifyChatMessageCreated(input: {
       },
     });
   } catch (error) {
-    console.warn("[notifications] chat.message.created failed", error instanceof Error ? error.message : error);
+    notificationLogger.notificationFailed(
+      `chat.message.created.${String((input.message as any)?._id || "unknown")}`,
+      "unknown",
+      error instanceof Error ? error.message : String(error),
+    );
   }
 }

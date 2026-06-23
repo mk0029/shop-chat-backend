@@ -29,7 +29,7 @@ export type NotificationEventType =
   | "hindu_festival_greeting"
   | "system.general";
 
-type NotificationInput = {
+export type NotificationInput = {
   eventType?: string;
   type?: string;
   eventId?: string;

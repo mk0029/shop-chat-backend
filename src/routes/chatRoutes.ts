@@ -131,7 +131,9 @@ router.post("/room/customer/:customerId", requireAdmin, async (req, res, next) =
     const room = await getOrCreateRoomByCustomerId(customerId);
     if (!room) return res.status(404).json({ message: "Customer not found" });
     const payload = serializeRoom(room);
-    getChatNamespace()?.to("admins").emit("room:updated", payload);
+    try {
+      getChatNamespace()?.to("admins").emit("room:updated", payload);
+    } catch {}
     res.json({ room: payload });
   } catch (error) {
     next(error);
@@ -147,13 +149,15 @@ router.post("/rooms/:roomId/clear", requireAdmin, async (req: AuthRequest, res, 
     const messagePayload = serializeMessage(result.message);
     const roomPayload = serializeRoom(await Room.findById(room._id).lean());
 
-    getChatNamespace()?.to(`room:${room._id}`).emit("message:cleared", {
-      roomId: String(room._id),
-      message: messagePayload,
-    });
-    getChatNamespace()?.to(`room:${room._id}`).emit("message:new", messagePayload);
-    getChatNamespace()?.to("admins").emit("room:updated", roomPayload);
-    getChatNamespace()?.to(`user:${room.customerId}`).emit("room:updated", roomPayload);
+    try {
+      getChatNamespace()?.to(`room:${room._id}`).emit("message:cleared", {
+        roomId: String(room._id),
+        message: messagePayload,
+      });
+      getChatNamespace()?.to(`room:${room._id}`).emit("message:new", messagePayload);
+      getChatNamespace()?.to("admins").emit("room:updated", roomPayload);
+      getChatNamespace()?.to(`user:${room.customerId}`).emit("room:updated", roomPayload);
+    } catch {}
 
     res.json({ message: messagePayload, room: roomPayload });
   } catch (error) {
@@ -193,9 +197,11 @@ router.post("/events/bill-created", requireAdmin, async (req: AuthRequest, res, 
 
     const messagePayload = serializeMessage(message);
     const roomPayload = serializeRoom(await Room.findById(room._id).lean());
-    getChatNamespace()?.to(`room:${room._id}`).emit("message:new", messagePayload);
-    getChatNamespace()?.to("admins").emit("room:updated", roomPayload);
-    getChatNamespace()?.to(`user:${room.customerId}`).emit("room:updated", roomPayload);
+    try {
+      getChatNamespace()?.to(`room:${room._id}`).emit("message:new", messagePayload);
+      getChatNamespace()?.to("admins").emit("room:updated", roomPayload);
+      getChatNamespace()?.to(`user:${room.customerId}`).emit("room:updated", roomPayload);
+    } catch {}
     void notifyChatMessageCreated({ room, message, sender: req.shopUser! });
     res.status(201).json({ message: messagePayload, room: roomPayload });
   } catch (error) {
@@ -263,9 +269,11 @@ router.post("/events/work-task", requireAdmin, async (req: AuthRequest, res, nex
 
     const messagePayload = serializeMessage(message);
     const roomPayload = serializeRoom(await Room.findById(room._id).lean());
-    getChatNamespace()?.to(`room:${room._id}`).emit("message:new", messagePayload);
-    getChatNamespace()?.to("admins").emit("room:updated", roomPayload);
-    getChatNamespace()?.to(`user:${room.customerId}`).emit("room:updated", roomPayload);
+    try {
+      getChatNamespace()?.to(`room:${room._id}`).emit("message:new", messagePayload);
+      getChatNamespace()?.to("admins").emit("room:updated", roomPayload);
+      getChatNamespace()?.to(`user:${room.customerId}`).emit("room:updated", roomPayload);
+    } catch {}
     void notifyChatMessageCreated({ room, message, sender: req.shopUser! });
     res.status(201).json({ message: messagePayload, room: roomPayload });
   } catch (error) {
@@ -298,9 +306,11 @@ router.post("/messages", async (req: AuthRequest, res, next) => {
     const messagePayload = serializeMessage(message);
     const updatedRoom = await Room.findById(room._id).lean();
     const roomPayload = serializeRoom(updatedRoom);
-    getChatNamespace()?.to(`room:${room._id}`).emit("message:new", messagePayload);
-    getChatNamespace()?.to("admins").emit("room:updated", roomPayload);
-    getChatNamespace()?.to(`user:${room.customerId}`).emit("room:updated", roomPayload);
+    try {
+      getChatNamespace()?.to(`room:${room._id}`).emit("message:new", messagePayload);
+      getChatNamespace()?.to("admins").emit("room:updated", roomPayload);
+      getChatNamespace()?.to(`user:${room.customerId}`).emit("room:updated", roomPayload);
+    } catch {}
     void notifyChatMessageCreated({ room, message, sender: req.shopUser! });
     res.status(201).json({ message: messagePayload, room: roomPayload });
   } catch (error) {
@@ -314,10 +324,14 @@ router.patch("/messages/:messageId", async (req: AuthRequest, res, next) => {
     const result = await editMessage(String(req.params.messageId), req.shopUser!, input.text);
     if (!result) return res.status(404).json({ message: "Message not found" });
     const messagePayload = serializeMessage(result.message);
-    getChatNamespace()?.to(`room:${result.room._id}`).emit("message:status", { messages: [messagePayload] });
+    try {
+      getChatNamespace()?.to(`room:${result.room._id}`).emit("message:status", { messages: [messagePayload] });
+    } catch {}
     const updatedRoom = await Room.findById(result.room._id).lean();
-    getChatNamespace()?.to("admins").emit("room:updated", serializeRoom(updatedRoom));
-    getChatNamespace()?.to(`user:${result.room.customerId}`).emit("room:updated", serializeRoom(updatedRoom));
+    try {
+      getChatNamespace()?.to("admins").emit("room:updated", serializeRoom(updatedRoom));
+      getChatNamespace()?.to(`user:${result.room.customerId}`).emit("room:updated", serializeRoom(updatedRoom));
+    } catch {}
     res.json({ message: messagePayload, room: serializeRoom(updatedRoom) });
   } catch (error) {
     next(error);
@@ -332,9 +346,11 @@ router.delete("/messages/:messageId", async (req: AuthRequest, res, next) => {
     if (result.localOnly) return res.json({ ok: true, messageId: String(result.message._id), localOnly: true });
     const messagePayload = serializeMessage(result.message);
     const updatedRoom = await Room.findById(result.room._id).lean();
-    getChatNamespace()?.to(`room:${result.room._id}`).emit("message:status", { messages: [messagePayload] });
-    getChatNamespace()?.to("admins").emit("room:updated", serializeRoom(updatedRoom));
-    getChatNamespace()?.to(`user:${result.room.customerId}`).emit("room:updated", serializeRoom(updatedRoom));
+    try {
+      getChatNamespace()?.to(`room:${result.room._id}`).emit("message:status", { messages: [messagePayload] });
+      getChatNamespace()?.to("admins").emit("room:updated", serializeRoom(updatedRoom));
+      getChatNamespace()?.to(`user:${result.room.customerId}`).emit("room:updated", serializeRoom(updatedRoom));
+    } catch {}
     res.json({ message: messagePayload, room: serializeRoom(updatedRoom), localOnly: false });
   } catch (error) {
     next(error);
@@ -347,7 +363,9 @@ router.post("/messages/:messageId/react", async (req: AuthRequest, res, next) =>
     const result = await reactToMessage(String(req.params.messageId), req.shopUser!, input.emoji);
     if (!result?.message) return res.status(404).json({ message: "Message not found" });
     const messagePayload = serializeMessage(result.message);
-    getChatNamespace()?.to(`room:${result.room._id}`).emit("message:status", { messages: [messagePayload] });
+    try {
+      getChatNamespace()?.to(`room:${result.room._id}`).emit("message:status", { messages: [messagePayload] });
+    } catch {}
     res.json({ message: messagePayload });
   } catch (error) {
     next(error);
@@ -373,9 +391,11 @@ router.post("/messages/:messageId/forward", async (req: AuthRequest, res, next) 
     });
     const messagePayload = serializeMessage(message);
     const roomPayload = serializeRoom(await Room.findById(targetRoom._id).lean());
-    getChatNamespace()?.to(`room:${targetRoom._id}`).emit("message:new", messagePayload);
-    getChatNamespace()?.to("admins").emit("room:updated", roomPayload);
-    getChatNamespace()?.to(`user:${targetRoom.customerId}`).emit("room:updated", roomPayload);
+    try {
+      getChatNamespace()?.to(`room:${targetRoom._id}`).emit("message:new", messagePayload);
+      getChatNamespace()?.to("admins").emit("room:updated", roomPayload);
+      getChatNamespace()?.to(`user:${targetRoom.customerId}`).emit("room:updated", roomPayload);
+    } catch {}
     res.status(201).json({ message: messagePayload, room: roomPayload });
   } catch (error) {
     next(error);
@@ -390,7 +410,9 @@ router.patch("/messages/:messageId/status", async (req: AuthRequest, res, next) 
     const room = await assertRoomAccess(req.shopUser!, String(message.roomId));
     if (!room) return res.status(403).json({ message: "Room access denied" });
     const payload = await markDelivered([messageId], req.shopUser!);
-    getChatNamespace()?.to(`room:${room._id}`).emit("message:status", { messages: payload });
+    try {
+      getChatNamespace()?.to(`room:${room._id}`).emit("message:status", { messages: payload });
+    } catch {}
     res.json({ messages: payload });
   } catch (error) {
     next(error);
@@ -405,12 +427,14 @@ router.patch("/messages/:messageId/read", async (req: AuthRequest, res, next) =>
     const room = await assertRoomAccess(req.shopUser!, String(message.roomId));
     if (!room) return res.status(403).json({ message: "Room access denied" });
     const messages = await markRoomRead(room, req.shopUser!, [messageId]);
-    getChatNamespace()?.to(`room:${room._id}`).emit("message:read", {
-      roomId: String(room._id),
-      userId: req.shopUser!.id,
-      messageIds: [messageId],
-    });
-    getChatNamespace()?.to(`room:${room._id}`).emit("message:status", { messages });
+    try {
+      getChatNamespace()?.to(`room:${room._id}`).emit("message:read", {
+        roomId: String(room._id),
+        userId: req.shopUser!.id,
+        messageIds: [messageId],
+      });
+      getChatNamespace()?.to(`room:${room._id}`).emit("message:status", { messages });
+    } catch {}
     res.json({ ok: true, messages });
   } catch (error) {
     next(error);

@@ -16,11 +16,15 @@ import { notifyChatMessageCreated } from "../services/notificationService";
 let chatNamespace: ReturnType<Server["of"]> | null = null;
 const PRESENCE_TTL_MS = 75_000;
 const PRESENCE_PRUNE_INTERVAL_MS = 30_000;
+const TYPING_HEARTBEAT_MS = 4_000;
+const TYPING_PRUNE_INTERVAL_MS = 2_000;
 
 const onlineUsers = new Map<string, { user: ShopUser; sockets: Map<string, string> }>();
 const lastSeenByUser = new Map<string, string>();
 const activeChatBySocket = new Map<string, { userId: string; roomId: string }>();
+const typingState = new Map<string, { userId: string; roomId: string; at: number; name: string; role: string }>();
 let presencePruneTimer: NodeJS.Timeout | null = null;
+let typingPruneTimer: NodeJS.Timeout | null = null;
 
 export function getChatNamespace() {
   return chatNamespace;
@@ -106,6 +110,55 @@ function removePresence(socket: Socket, user: ShopUser) {
   } catch {}
 }
 
+function setTypingKey(userId: string, roomId: string) {
+  return `${userId}:${roomId}`;
+}
+
+function touchTyping(userId: string, roomId: string, name: string, role: string) {
+  const key = setTypingKey(userId, roomId);
+  typingState.set(key, { userId, roomId, at: Date.now(), name, role });
+}
+
+function clearTyping(userId: string, roomId: string) {
+  const key = setTypingKey(userId, roomId);
+  typingState.delete(key);
+}
+
+function isUserTyping(userId: string, roomId: string) {
+  const key = setTypingKey(userId, roomId);
+  const entry = typingState.get(key);
+  if (!entry) return false;
+  if (Date.now() - entry.at > TYPING_HEARTBEAT_MS) {
+    typingState.delete(key);
+    return false;
+  }
+  return true;
+}
+
+function pruneStaleTyping() {
+  const now = Date.now();
+  const stale: Array<{ userId: string; roomId: string }> = [];
+  for (const [, entry] of typingState) {
+    if (now - entry.at > TYPING_HEARTBEAT_MS) {
+      stale.push({ userId: entry.userId, roomId: entry.roomId });
+    }
+  }
+  for (const { userId, roomId } of stale) {
+    const key = setTypingKey(userId, roomId);
+    typingState.delete(key);
+    try {
+      chatNamespace?.to(`room:${roomId}`).emit("typing:update", {
+        roomId,
+        userId,
+        role: "",
+        name: "",
+        typing: false,
+        at: new Date().toISOString(),
+      });
+    } catch {}
+  }
+}
+
 function pruneStalePresence(shouldEmit = true) {
   try {
     const cutoff = Date.now() - PRESENCE_TTL_MS;
@@ -134,6 +187,9 @@ function startPresencePruner() {
   if (presencePruneTimer) return;
   presencePruneTimer = setInterval(() => pruneStalePresence(), PRESENCE_PRUNE_INTERVAL_MS);
   presencePruneTimer.unref?.();
+  if (typingPruneTimer) return;
+  typingPruneTimer = setInterval(() => pruneStaleTyping(), TYPING_PRUNE_INTERVAL_MS);
+  typingPruneTimer.unref?.();
 }
 
 async function authenticateSocket(socket: Socket) {
@@ -295,13 +351,20 @@ export function registerChatSocket(io: Server) {
       if (!roomId) return;
       const room = await assertRoomAccess(user, roomId);
       if (!room) return;
+      const rid = String(room._id);
+      const isTyping = Boolean(typing);
+      if (isTyping) {
+        touchTyping(user.id, rid, user.name, user.role);
+      } else {
+        clearTyping(user.id, rid);
+      }
       try {
-        socket.to(`room:${room._id}`).emit("typing:update", {
-          roomId: String(room._id),
+        socket.to(`room:${rid}`).emit("typing:update", {
+          roomId: rid,
           userId: user.id,
           role: user.role,
           name: user.name,
-          typing: Boolean(typing),
+          typing: isTyping,
           at: new Date().toISOString(),
         });
       } catch {}
@@ -337,6 +400,22 @@ export function registerChatSocket(io: Server) {
 
     socket.on("disconnect", () => {
       activeChatBySocket.delete(socket.id);
+      for (const [key, entry] of typingState) {
+        if (entry.userId === user.id) {
+          const rid = entry.roomId;
+          typingState.delete(key);
+          try {
+            chatNamespace?.to(`room:${rid}`).emit("typing:update", {
+              roomId: rid,
+              userId: user.id,
+              role: user.role,
+              name: user.name,
+              typing: false,
+              at: new Date().toISOString(),
+            });
+          } catch {}
+        }
+      }
       if (contributesPresence) {
         removePresence(socket, user);
         emitPresence();

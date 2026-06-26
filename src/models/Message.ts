@@ -30,6 +30,21 @@ const ReactionSchema = new Schema(
   { _id: false },
 );
 
+const ChatMediaSchema = new Schema(
+  {
+    type: { type: String, enum: ["image", "video", "audio", "file"], required: true },
+    url: { type: String, required: true },
+    path: String,
+    fileName: String,
+    mimeType: String,
+    size: Number,
+    width: Number,
+    height: Number,
+    uploadedAt: Date,
+  },
+  { _id: false },
+);
+
 const MessageSchema = new Schema(
   {
     roomId: { type: Schema.Types.ObjectId, ref: "ShopChatRoom", required: true, index: true },
@@ -37,20 +52,7 @@ const MessageSchema = new Schema(
     type: { type: String, enum: ["text", "image", "video", "audio", "file"], default: "text" },
     text: { type: String, default: "" },
     attachments: { type: [Schema.Types.Mixed], default: [] },
-    media: {
-      type: {
-        type: { type: String, enum: ["image", "video", "audio", "file"] },
-        url: String,
-        path: String,
-        fileName: String,
-        mimeType: String,
-        size: Number,
-        width: Number,
-        height: Number,
-        uploadedAt: Date,
-      },
-      default: null,
-    },
+    media: { type: ChatMediaSchema, default: null },
     senderId: { type: String, required: true, index: true },
     senderRole: { type: String, enum: ["admin", "super_admin", "technician", "customer"], required: true },
     senderName: { type: String, required: true },

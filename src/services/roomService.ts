@@ -365,7 +365,7 @@ export async function markRoomRead(room: RoomDoc, user: ShopUser, messageIds?: s
 export async function listRoomsForUser(user: ShopUser, cursor: string | null, limit: number) {
   if (isAdmin(user)) {
     const start = Date.now();
-    const filter: any = { "participants.userId": user.id };
+    const filter: any = {};
     if (cursor) {
       // Use _id-based cursor for stable pagination
       filter._id = { $lt: cursor };

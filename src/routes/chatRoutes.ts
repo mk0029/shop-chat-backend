@@ -387,6 +387,7 @@ router.post("/messages/:messageId/forward", async (req: AuthRequest, res, next) 
       text: String((original as any).text || ""),
       type: (original as any).type || "text",
       attachments: (original as any).attachments || [],
+      media: (original as any).media || null,
       forwarded: true,
       forwardedFrom: String(original._id),
     });

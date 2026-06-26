@@ -87,7 +87,7 @@ MessageSchema.index({ clientMessageId: 1 }, { sparse: true, unique: true });
 // Status queries (e.g. find unseen messages)
 MessageSchema.index({ senderId: 1, status: 1 });
 // Find messages by receiver (room participants)
-MessageSchema.index({ roomId: 1, senderId: { $ne: null }, status: 1 });
+MessageSchema.index({ roomId: 1, status: 1 }, { partialFilterExpression: { senderId: { $ne: null } } });
 
 export type MessageDoc = InferSchemaType<typeof MessageSchema> & { _id: mongoose.Types.ObjectId };
 export const Message = mongoose.model("ShopChatMessage", MessageSchema);

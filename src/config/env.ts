@@ -28,6 +28,8 @@ export const env = {
   holidayCalendarApiUrl: process.env.HOLIDAY_CALENDAR_API_URL || "",
   holidayCalendarApiKey: process.env.HOLIDAY_CALENDAR_API_KEY || process.env.CALENDARIFIC_API_KEY || "",
   holidayCalendarCountry: process.env.HOLIDAY_CALENDAR_COUNTRY || "IN",
+  supabaseUrl: process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+  supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
 };
 
 export function validateEnv() {

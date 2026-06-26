@@ -307,13 +307,14 @@ export function registerChatSocket(io: Server) {
           text?: string;
           type?: "text" | "image" | "video" | "audio" | "file";
           attachments?: unknown[];
+          media?: Record<string, unknown> | null;
           replyTo?: { messageId: string; text: string; senderId: string; senderName?: string } | null;
           clientMessageId?: string;
         },
         ack?: (payload: { ok: boolean; message?: unknown; room?: unknown; error?: string; clientMessageId?: string }) => void,
       ) => {
         try {
-          if (!input.roomId || !String(input.text || "").trim()) {
+          if (!input.roomId || (!String(input.text || "").trim() && !input.media)) {
             ack?.({ ok: false, error: "roomId and text required", clientMessageId: input.clientMessageId });
             return;
           }
@@ -328,6 +329,7 @@ export function registerChatSocket(io: Server) {
             text: String(input.text),
             type: input.type || "text",
             attachments: input.attachments || [],
+            media: input.media || null,
             replyTo: input.replyTo || null,
             clientMessageId: input.clientMessageId,
           });

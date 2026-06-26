@@ -46,9 +46,10 @@ function dedupeBillCreatedEvents(messages: any[]) {
 
 const sendMessageSchema = z.object({
   roomId: z.string(),
-  text: z.string().trim().min(1).max(5000),
+  text: z.string().trim().min(0).max(5000),
   type: z.enum(["text", "image", "video", "audio", "file"]).optional(),
   attachments: z.array(z.unknown()).optional(),
+  media: z.record(z.unknown()).nullable().optional(),
   clientMessageId: z.string().trim().max(120).optional(),
   replyTo: z
     .object({

@@ -3,6 +3,7 @@ import { Room, type RoomDoc } from "../models/Room";
 import { Message, type MessageDoc } from "../models/Message";
 import type { ShopUser } from "../types/auth";
 import { getCustomerById, isAdmin, listAdminParticipants } from "./shopAuth";
+import { deleteFiles, extractFilePathsFromMessage } from "./storageService";
 
 function chatRoleFor(user: ShopUser) {
   return user.role === "super_admin" ? "admin" : user.role;
@@ -32,6 +33,7 @@ export function serializeMessage(message: any) {
     type: message.type || "text",
     text: message.text || "",
     attachments: message.attachments || [],
+    media: message.media || null,
     senderId: message.senderId,
     senderRole: message.senderRole,
     senderName: message.senderName,
@@ -120,6 +122,7 @@ export async function createMessage(params: {
   text: string;
   type?: "text" | "image" | "video" | "audio" | "file";
   attachments?: unknown[];
+  media?: Record<string, unknown> | null;
   replyTo?: { messageId: string; text: string; senderId: string; senderName?: string } | null;
   clientMessageId?: string;
   forwarded?: boolean;
@@ -151,6 +154,7 @@ export async function createMessage(params: {
       type: params.type || "text",
       text,
       attachments: params.attachments || [],
+      media: params.media || null,
       senderId,
       senderRole,
       senderName,
@@ -249,10 +253,15 @@ export async function deleteMessage(messageId: string, user: ShopUser, scope: "m
     throw new Error("Only the sender can delete this message for everyone");
   }
 
+  const filePaths = extractFilePathsFromMessage(message);
   (message as any).text = "This message was deleted";
   (message as any).attachments = [];
+  (message as any).media = null;
   (message as any).deletedAt = new Date();
   await message.save();
+  if (filePaths.length) {
+    void deleteFiles(filePaths);
+  }
   await Room.updateOne(
     { _id: room._id, "lastMessage.messageId": String(message._id) },
     {
@@ -267,8 +276,13 @@ export async function deleteMessage(messageId: string, user: ShopUser, scope: "m
 
 export async function clearRoomMessagesForEveryone(room: RoomDoc, user: ShopUser) {
   const now = new Date();
+  const allMessages = await Message.find({ roomId: room._id }).lean();
+  const allPaths = allMessages.flatMap((msg) => extractFilePathsFromMessage(msg));
   await Message.deleteMany({ roomId: room._id });
   await Room.updateOne({ _id: room._id }, { $set: { unreadBy: {} } });
+  if (allPaths.length) {
+    void deleteFiles(allPaths);
+  }
 
   const message = await createMessage({
     room,

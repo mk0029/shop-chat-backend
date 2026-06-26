@@ -80,8 +80,10 @@ MessageSchema.index(
 );
 // Room message listing (latest first)
 MessageSchema.index({ roomId: 1, createdAt: -1 });
-// Cursor-based pagination
+// Cursor-based pagination (+ _id tiebreaker for stable cursor)
 MessageSchema.index({ roomId: 1, _id: -1 });
+// Messages for room + createdAt for time range queries
+MessageSchema.index({ roomId: 1, createdAt: -1, _id: -1 });
 // Standalone clientMessageId dedup
 MessageSchema.index({ clientMessageId: 1 }, { sparse: true, unique: true });
 // Status queries (e.g. find unseen messages)

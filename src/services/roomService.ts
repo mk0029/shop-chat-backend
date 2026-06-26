@@ -364,27 +364,45 @@ export async function markRoomRead(room: RoomDoc, user: ShopUser, messageIds?: s
 
 export async function listRoomsForUser(user: ShopUser, cursor: string | null, limit: number) {
   if (isAdmin(user)) {
-    let filter: any = { "participants.userId": user.id };
+    const start = Date.now();
+    const filter: any = { "participants.userId": user.id };
     if (cursor) {
-      filter.updatedAt = { $lt: new Date(cursor) };
+      // Use _id-based cursor for stable pagination
+      filter._id = { $lt: cursor };
     }
-    let rooms = await Room.find(filter)
-      .sort({ updatedAt: -1 })
+    const rooms = await Room.find(filter)
+      .sort({ _id: -1 })
       .limit(limit)
       .lean()
-      .select({ customerId: 1, customerKey: 1, customerName: 1, admins: 1, participants: 1, lastMessage: 1, unreadBy: 1, createdAt: 1, updatedAt: 1 });
-    // Fallback if no rooms found with participant filter and no cursor (fresh data)
-    if (rooms.length === 0 && !cursor) {
-      rooms = await Room.find({})
-        .sort({ updatedAt: -1 })
-        .limit(limit)
-        .lean()
-        .select({ customerId: 1, customerKey: 1, customerName: 1, admins: 1, participants: 1, lastMessage: 1, unreadBy: 1, createdAt: 1, updatedAt: 1 });
+      .select({
+        customerId: 1,
+        customerKey: 1,
+        customerName: 1,
+        lastMessage: 1,
+        unreadBy: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        "admins.userId": 1,
+        "participants.userId": 1,
+      });
+    if (process.env.NODE_ENV === "development") {
+      console.log(`[chat-timing] listRoomsForUser admin: ${Date.now() - start}ms, rooms: ${rooms.length}`);
     }
     const hasMore = rooms.length >= limit;
-    const nextCursor = rooms.length > 0 ? rooms[rooms.length - 1].updatedAt?.toISOString?.() || String(rooms[rooms.length - 1]._id) : null;
+    const nextCursor = rooms.length > 0 ? String(rooms[rooms.length - 1]._id) : null;
     return { rooms: rooms.map(serializeRoom), nextCursor, hasMore };
   }
-  const room = await Room.findOne({ customerId: user.id }).lean();
+  const start = Date.now();
+  const room = await Room.findOne({ customerId: user.id })
+    .lean()
+    .select({
+      customerId: 1, customerKey: 1, customerName: 1,
+      lastMessage: 1, unreadBy: 1, createdAt: 1, updatedAt: 1,
+      "admins.userId": 1,
+      "participants.userId": 1,
+    });
+  if (process.env.NODE_ENV === "development") {
+    console.log(`[chat-timing] listRoomsForUser customer: ${Date.now() - start}ms`);
+  }
   return { rooms: room ? [serializeRoom(room)] : [], nextCursor: null, hasMore: false };
 }

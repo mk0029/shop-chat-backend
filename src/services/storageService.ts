@@ -74,3 +74,20 @@ export function extractFilePathsFromMessage(message: any): string[] {
   }
   return paths;
 }
+
+export async function createSignedUpload(fileName: string, contentType: string) {
+  const admin = getAdminClient();
+  if (!admin) throw new Error("Supabase not configured");
+  const filePath = `chat-uploads/${Date.now()}-${fileName.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+  const { data, error } = await admin.storage
+    .from(CHAT_MEDIA_BUCKET)
+    .createSignedUploadUrl(filePath);
+  if (error) throw new Error(`Failed to create signed upload: ${error.message}`);
+  const publicUrl = admin.storage.from(CHAT_MEDIA_BUCKET).getPublicUrl(filePath).data.publicUrl;
+  return {
+    url: data?.signedUrl || null,
+    path: filePath,
+    publicUrl,
+    token: data?.token || null,
+  };
+}

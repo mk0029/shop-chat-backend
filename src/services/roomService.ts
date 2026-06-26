@@ -335,7 +335,7 @@ export async function markDelivered(messageIds: string[], user: ShopUser) {
       $set: { status: "delivered" },
     },
   );
-  const messages = await Message.find({ _id: { $in: validIds } });
+  const messages = await Message.find({ _id: { $in: validIds } }).lean();
   return messages.map(serializeMessage);
 }
 
@@ -357,7 +357,34 @@ export async function markRoomRead(room: RoomDoc, user: ShopUser, messageIds?: s
   });
   await Room.updateOne({ _id: room._id }, { $set: { [`unreadBy.${user.id}`]: 0 } });
   const messages = validMessageIds?.length
-    ? await Message.find({ _id: { $in: validMessageIds } })
-    : await Message.find({ roomId: room._id });
+    ? await Message.find({ _id: { $in: validMessageIds } }).lean()
+    : await Message.find({ roomId: room._id }).lean();
   return messages.map(serializeMessage);
+}
+
+export async function listRoomsForUser(user: ShopUser, cursor: string | null, limit: number) {
+  if (isAdmin(user)) {
+    let filter: any = { "participants.userId": user.id };
+    if (cursor) {
+      filter.updatedAt = { $lt: new Date(cursor) };
+    }
+    let rooms = await Room.find(filter)
+      .sort({ updatedAt: -1 })
+      .limit(limit)
+      .lean()
+      .select({ customerId: 1, customerKey: 1, customerName: 1, admins: 1, participants: 1, lastMessage: 1, unreadBy: 1, createdAt: 1, updatedAt: 1 });
+    // Fallback if no rooms found with participant filter and no cursor (fresh data)
+    if (rooms.length === 0 && !cursor) {
+      rooms = await Room.find({})
+        .sort({ updatedAt: -1 })
+        .limit(limit)
+        .lean()
+        .select({ customerId: 1, customerKey: 1, customerName: 1, admins: 1, participants: 1, lastMessage: 1, unreadBy: 1, createdAt: 1, updatedAt: 1 });
+    }
+    const hasMore = rooms.length >= limit;
+    const nextCursor = rooms.length > 0 ? rooms[rooms.length - 1].updatedAt?.toISOString?.() || String(rooms[rooms.length - 1]._id) : null;
+    return { rooms: rooms.map(serializeRoom), nextCursor, hasMore };
+  }
+  const room = await Room.findOne({ customerId: user.id }).lean();
+  return { rooms: room ? [serializeRoom(room)] : [], nextCursor: null, hasMore: false };
 }

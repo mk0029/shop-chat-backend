@@ -73,11 +73,21 @@ const MessageSchema = new Schema(
   { timestamps: true },
 );
 
+// Fast dedup lookup
 MessageSchema.index(
   { roomId: 1, senderId: 1, clientMessageId: 1 },
   { unique: true, partialFilterExpression: { clientMessageId: { $type: "string" } } },
 );
+// Room message listing (latest first)
 MessageSchema.index({ roomId: 1, createdAt: -1 });
+// Cursor-based pagination
+MessageSchema.index({ roomId: 1, _id: -1 });
+// Standalone clientMessageId dedup
+MessageSchema.index({ clientMessageId: 1 }, { sparse: true, unique: true });
+// Status queries (e.g. find unseen messages)
+MessageSchema.index({ senderId: 1, status: 1 });
+// Find messages by receiver (room participants)
+MessageSchema.index({ roomId: 1, senderId: { $ne: null }, status: 1 });
 
 export type MessageDoc = InferSchemaType<typeof MessageSchema> & { _id: mongoose.Types.ObjectId };
 export const Message = mongoose.model("ShopChatMessage", MessageSchema);

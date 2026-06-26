@@ -9,6 +9,7 @@ import {
   serializeMessage,
   serializeRoom,
 } from "../services/roomService";
+import { Message } from "../models/Message";
 import { Room } from "../models/Room";
 import type { ShopUser } from "../types/auth";
 import { notifyChatMessageCreated } from "../services/notificationService";
@@ -397,6 +398,20 @@ export function registerChatSocket(io: Server) {
         chatNamespace?.to(`room:${room._id}`).emit("message:status", { messages });
         chatNamespace?.to("admins").emit("room:updated", serializeRoom(updatedRoom));
         chatNamespace?.to(`user:${room.customerId}`).emit("room:updated", serializeRoom(updatedRoom));
+      } catch {}
+    });
+
+    socket.on("message:seen", async ({ roomId }: { roomId?: string }) => {
+      if (!roomId) return;
+      const room = await assertRoomAccess(user, roomId);
+      if (!room) return;
+      try {
+        await Message.updateMany(
+          { roomId: room._id, senderId: { $ne: user.id }, "readBy.userId": { $ne: user.id } },
+          { $addToSet: { readBy: { userId: user.id, role: user.role, name: user.name, at: new Date() } }, $set: { status: "read" } },
+        );
+        await Room.updateOne({ _id: room._id }, { $set: { [`unreadBy.${user.id}`]: 0 } });
+        chatNamespace?.to(`room:${room._id}`).emit("message:read", { roomId: String(room._id), userId: user.id, messageIds: [] });
       } catch {}
     });
 

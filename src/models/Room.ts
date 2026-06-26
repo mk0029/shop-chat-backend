@@ -39,7 +39,12 @@ const RoomSchema = new Schema(
   { timestamps: true },
 );
 
+// Sort rooms by latest activity
 RoomSchema.index({ updatedAt: -1 });
+// Fast per-user room listing (admin dashboard, customer sidebar)
+RoomSchema.index({ "participants.userId": 1, updatedAt: -1 });
+// For customerId lookups (already has unique index on customerId)
+RoomSchema.index({ customerId: 1 }, { unique: true });
 
 export type RoomDoc = InferSchemaType<typeof RoomSchema> & { _id: mongoose.Types.ObjectId };
 export const Room = mongoose.model("ShopChatRoom", RoomSchema);

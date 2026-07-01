@@ -7,8 +7,6 @@ import { registerChatSocket } from "./sockets/chatSocket";
 import { startNotificationScheduler } from "./services/notificationScheduler";
 import { startNotificationQueue, stopNotificationQueue } from "./services/notificationQueue";
 import { notificationLogger } from "./lib/notificationLogger";
-import { waClient } from "./services/whatsapp/waClient.service";
-import { waQueue } from "./services/whatsapp/waQueue.service";
 
 async function main() {
   validateEnv();
@@ -16,8 +14,6 @@ async function main() {
 
   startNotificationQueue({ concurrency: 5, defaultMaxRetries: 3, defaultTimeoutMs: 20_000 });
   notificationLogger.startPeriodicFlush();
-  waQueue.start();
-  void waClient.start("server_startup");
 
   const server = http.createServer(app);
   const io = new Server(server, {
@@ -39,8 +35,6 @@ async function main() {
     console.log("[shop-chat] shutting down...");
     stopNotificationQueue();
     notificationLogger.stopPeriodicFlush();
-    waQueue.stop();
-    void waClient.shutdown();
     io.close();
     server.close(() => process.exit(0));
   };
@@ -52,5 +46,7 @@ main().catch((error) => {
   console.error("[shop-chat] failed to start", error);
   process.exit(1);
 });
+
+
 
 

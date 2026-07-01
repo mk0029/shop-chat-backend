@@ -6,6 +6,7 @@ import { env } from "./config/env";
 import chatRoutes from "./routes/chatRoutes";
 import sessionRoutes from "./routes/sessionRoutes";
 import notificationRoutes from "./routes/notificationRoutes";
+import waEventRoutes from "./routes/waEventRoutes";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -45,6 +46,7 @@ app.use(
 app.use("/internal", sessionRoutes);
 app.use("/notifications", notificationRoutes);
 app.use("/", notificationRoutes);
+app.use("/api/wa", waEventRoutes);
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "shop-chat-backend", at: new Date().toISOString() });
@@ -59,3 +61,5 @@ app.use((error: any, _req: express.Request, res: express.Response, _next: expres
 });
 
 export default app;
+
+

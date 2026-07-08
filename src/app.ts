@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
 import { env } from "./config/env";
 import chatRoutes from "./routes/chatRoutes";
 import sessionRoutes from "./routes/sessionRoutes";

@@ -6,6 +6,14 @@ import { env } from "./config/env";
 import chatRoutes from "./routes/chatRoutes";
 import sessionRoutes from "./routes/sessionRoutes";
 import notificationRoutes from "./routes/notificationRoutes";
+import { waf } from "./middleware/security/waf";
+import {
+  authLimiter,
+  searchLimiter,
+  uploadLimiter,
+  waEventLimiter,
+  chatLimiter,
+} from "./middleware/security/rateLimiter";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -26,25 +34,36 @@ app.use(
     },
     credentials: true,
     methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Shop-Auth", "x-user-id", "x-notify-secret", "x-api-key"],
   }),
 );
-app.use(helmet());
-app.use(express.json({ limit: "25mb" }));
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+}));
+app.use(express.json({ limit: "1mb" }));
+
+app.use(waf);
 
 app.use(
   "/chat",
-  rateLimit({
-    windowMs: 60_000,
-    limit: 300,
-    standardHeaders: true,
-    legacyHeaders: false,
-  }),
+  chatLimiter,
   chatRoutes,
 );
 
 app.use("/internal", sessionRoutes);
-app.use("/notifications", notificationRoutes);
-app.use("/", notificationRoutes);
+
+app.use(
+  "/notifications",
+  waEventLimiter,
+  notificationRoutes,
+);
+
+app.use(
+  "/",
+  waEventLimiter,
+  notificationRoutes,
+);
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "shop-chat-backend", at: new Date().toISOString() });
@@ -54,7 +73,13 @@ app.use((error: any, _req: express.Request, res: express.Response, _next: expres
   if (error?.name === "ZodError") {
     return res.status(400).json({ message: "Validation failed", issues: error.issues });
   }
-  console.error("[error]", error);
+  console.error(JSON.stringify({
+    level: "error",
+    event: "unhandled_error",
+    timestamp: new Date().toISOString(),
+    message: error?.message || String(error),
+    stack: error?.stack?.slice(0, 500),
+  }));
   res.status(500).json({ message: "Internal server error" });
 });
 

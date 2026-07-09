@@ -45,6 +45,7 @@ function deviceRoom(userId: string, deviceId: string) {
 export function emitDeviceRevoked(input: {
   userId: string;
   deviceId?: string;
+  sessionId?: string;
   reason?: string;
   loggedInOn?: string;
   message?: string;
@@ -54,6 +55,7 @@ export function emitDeviceRevoked(input: {
     const payload = {
       reason: input.reason || "LOGGED_IN_ON_ANOTHER_DEVICE",
       deviceId: input.deviceId,
+      sessionId: input.sessionId,
       loggedInOn: input.loggedInOn,
       message:
         input.message ||

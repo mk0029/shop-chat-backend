@@ -715,24 +715,7 @@ export async function registerNotificationToken(input: {
     },
     { new: true, upsert: true },
   );
-  const allowed = await allowedDevicesFor(userId);
-  const active = await FcmToken.find({ userId, isActive: true }).sort({ updatedAt: -1 });
-  const stale = active.slice(allowed);
-  for (const old of stale) {
-    await FcmToken.updateOne(
-      { _id: old._id },
-      { $set: { isActive: false, deactivatedAt: now, deactivatedReason: "DEVICE_LIMIT_EXCEEDED" } },
-    );
-    if (old.deviceId && old.deviceId !== input.deviceId) {
-      emitDeviceRevoked({
-        userId,
-        deviceId: old.deviceId,
-        reason: "DEVICE_LIMIT_EXCEEDED",
-        loggedInOn: input.deviceName || input.platform || "another device",
-      });
-    }
-  }
-  return { userId, tokenId: String(token._id), allowedDevicesCount: allowed, removedTokens: stale.length };
+  return { userId, tokenId: String(token._id), allowedDevicesCount: 1, removedTokens: 0 };
 }
 
 export async function removeNotificationToken(input: { userId?: string; token: string }) {

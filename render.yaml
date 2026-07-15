@@ -7,3 +7,35 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: 5000
+      - key: SANITY_PROJECT_ID
+        value: idji8ni7
+      - key: SANITY_DATASET
+        value: live-shop
+      - key: SANITY_API_TOKEN
+        sync: false
+      - key: SANITY_API_VERSION
+        value: 2024-01-01
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: CHAT_SYNC_TOKEN
+        sync: false
+      - key: MONGO_URI
+        sync: false
+      - key: BACKEND_URL
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        value: web-push-shop
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: NOTIFICATION_GREETING_TIMEZONE
+        value: Asia/Kolkata
+      - key: ENABLE_NOTIFICATION_CRON
+        value: "true"

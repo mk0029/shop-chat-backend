@@ -97,10 +97,11 @@ router.use(requireShopAuth);
 router.get("/rooms", requireAdmin, async (req: AuthRequest, res, next) => {
   try {
     const cursor = req.query.cursor ? String(req.query.cursor) : null;
+    const search = req.query.search ? String(req.query.search) : undefined;
     const rawLimit = Number(req.query.limit) || 20;
-    // limit=0 means "all rooms" (capped at 500)
-    const limit = rawLimit === 0 ? 500 : Math.min(50, Math.max(1, rawLimit));
-    const result = await listRoomsForUser(req.shopUser!, cursor, limit);
+    // limit=0 means "all rooms" (capped at 2000)
+    const limit = rawLimit === 0 ? 2000 : Math.min(100, Math.max(1, rawLimit));
+    const result = await listRoomsForUser(req.shopUser!, cursor, limit, search);
     res.json(result);
   } catch (error) {
     next(error);

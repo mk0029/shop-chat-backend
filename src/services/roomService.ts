@@ -371,16 +371,24 @@ export async function markRoomRead(room: RoomDoc, user: ShopUser, messageIds?: s
   return messages.map(serializeMessage);
 }
 
-export async function listRoomsForUser(user: ShopUser, cursor: string | null, limit: number) {
+export async function listRoomsForUser(user: ShopUser, cursor: string | null, limit: number, search?: string) {
   if (isAdmin(user)) {
     const start = Date.now();
     const filter: any = {};
     if (cursor) {
-      // Use _id-based cursor for stable pagination
       filter._id = { $lt: cursor };
     }
+    if (search && search.trim()) {
+      const q = search.trim();
+      const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      filter.$or = [
+        { customerName: regex },
+        { customerKey: regex },
+        { customerId: regex },
+      ];
+    }
     const rooms = await Room.find(filter)
-      .sort({ _id: -1 })
+      .sort({ updatedAt: -1, _id: -1 })
       .limit(limit)
       .lean()
       .select({

@@ -34,6 +34,7 @@ const RoomSchema = new Schema(
     admins: { type: [ParticipantSchema], default: [] },
     participants: { type: [ParticipantSchema], default: [] },
     lastMessage: { type: LastMessageSchema, default: null },
+    lastCustomerMessage: { type: LastMessageSchema, default: null },
     unreadBy: { type: Map, of: Number, default: {} },
   },
   { timestamps: true },
@@ -49,6 +50,8 @@ RoomSchema.index({ customerId: 1, updatedAt: -1 });
 RoomSchema.index({ customerId: 1 }, { unique: true });
 // For sorting rooms by last message time (used in sidebar)
 RoomSchema.index({ "lastMessage.createdAt": -1 });
+// For sorting admin rooms by last customer (non-system) message time
+RoomSchema.index({ "lastCustomerMessage.createdAt": -1 });
 
 export type RoomDoc = InferSchemaType<typeof RoomSchema> & { _id: mongoose.Types.ObjectId };
 export const Room = mongoose.model("ShopChatRoom", RoomSchema);

@@ -22,6 +22,7 @@ export function notifyChatMessageCreated(input: {
     const message = input.message as any;
     const sender = input.sender;
     const isCustomerSender = sender.role === "customer";
+    const isSystemMessage = message.messageKind === "system";
     const adminIds = Array.from(
       new Set(
         ((room.admins || []) as Array<{ userId?: string }>)
@@ -31,7 +32,11 @@ export function notifyChatMessageCreated(input: {
     );
     const customerId = String(room.customerId || "").trim();
     const supportToCustomerIds = customerId && customerId !== sender.id ? [customerId] : [];
-    const targetUserIds = isCustomerSender ? adminIds : supportToCustomerIds;
+    const targetUserIds = isSystemMessage
+      ? supportToCustomerIds
+      : isCustomerSender
+        ? adminIds
+        : supportToCustomerIds;
     if (!targetUserIds.length) return;
 
     const eventId = `chat.message.created.${String(message._id)}`;

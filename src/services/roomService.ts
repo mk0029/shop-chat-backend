@@ -19,6 +19,7 @@ export function serializeRoom(room: any) {
     admins: room.admins || [],
     participants: room.participants || [],
     lastMessage: room.lastMessage || null,
+    lastCustomerMessage: room.lastCustomerMessage || null,
     unreadBy: unreadByRaw,
     createdAt: room.createdAt?.toISOString?.() || room.createdAt,
     updatedAt: room.updatedAt?.toISOString?.() || room.updatedAt,
@@ -183,28 +184,36 @@ export async function createMessage(params: {
   for (const participant of (params.room as any).participants || []) {
     const userId = String(participant.userId);
     if (userId !== senderId) {
+      if (systemEvent && (participant.role === "admin" || participant.role === "super_admin")) {
+        continue;
+      }
       unreadBy[`unreadBy.${userId}`] = 1;
     }
   }
 
+  const lastMsg = {
+    messageId: String(message._id),
+    text,
+    type: params.type || "text",
+    senderId,
+    senderRole,
+    senderName,
+    systemEventType: params.systemEventType || null,
+    systemEventData: params.systemEventData || null,
+    createdAt: (message as any).createdAt || new Date(),
+  };
+
+  const update: any = {
+    $set: { lastMessage: lastMsg },
+    $inc: unreadBy,
+  };
+  if (!systemEvent) {
+    update.$set.lastCustomerMessage = lastMsg;
+  }
+
   await Room.updateOne(
     { _id: params.room._id },
-    {
-      $set: {
-        lastMessage: {
-          messageId: String(message._id),
-          text,
-          type: params.type || "text",
-          senderId,
-          senderRole,
-          senderName,
-          systemEventType: params.systemEventType || null,
-          systemEventData: params.systemEventData || null,
-          createdAt: (message as any).createdAt || new Date(),
-        },
-      },
-      $inc: unreadBy,
-    },
+    update,
   );
 
   return message as MessageDoc;
@@ -379,6 +388,7 @@ export async function listRoomsForUser(user: ShopUser, cursor: string | null, li
         customerKey: 1,
         customerName: 1,
         lastMessage: 1,
+        lastCustomerMessage: 1,
         unreadBy: 1,
         createdAt: 1,
         updatedAt: 1,
@@ -397,7 +407,7 @@ export async function listRoomsForUser(user: ShopUser, cursor: string | null, li
     .lean()
     .select({
       customerId: 1, customerKey: 1, customerName: 1,
-      lastMessage: 1, unreadBy: 1, createdAt: 1, updatedAt: 1,
+      lastMessage: 1, lastCustomerMessage: 1, unreadBy: 1, createdAt: 1, updatedAt: 1,
       "admins.userId": 1,
       "participants.userId": 1,
     });

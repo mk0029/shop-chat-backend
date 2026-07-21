@@ -173,7 +173,6 @@ router.post("/events/bill-created", requireAdmin, async (req: AuthRequest, res, 
     const participantIds = ((room as any).participants || []).map((p: any) => String(p.userId));
     try {
       getChatNamespace()?.to(`room:${room._id}`).emit("message:new", messagePayload);
-      getChatNamespace()?.to("admins").emit("room:updated", roomPayload);
       getChatNamespace()?.to(`user:${room.customerId}`).emit("room:updated", roomPayload);
     } catch {}
     void emitSyncEvent({ eventType: "message.created", roomId: String(room._id), payload: messagePayload, userIds: participantIds });
@@ -224,7 +223,6 @@ router.post("/events/work-task", requireAdmin, async (req: AuthRequest, res, nex
     const roomPayload = serializeRoom(await Room.findById(room._id).lean());
     try {
       getChatNamespace()?.to(`room:${room._id}`).emit("message:new", messagePayload);
-      getChatNamespace()?.to("admins").emit("room:updated", roomPayload);
       getChatNamespace()?.to(`user:${room.customerId}`).emit("room:updated", roomPayload);
     } catch {}
     void notifyChatMessageCreated({ room, message, sender: req.shopUser! });

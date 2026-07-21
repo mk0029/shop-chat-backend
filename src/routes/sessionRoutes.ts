@@ -146,7 +146,7 @@ router.post("/session/logout", sessionRateLimiter, async (req, res) => {
   }
 
   try {
-    const filter: Record<string, unknown> = {};
+    let filter: Record<string, unknown> = {};
     if (sessionId) filter.sessionId = sessionId;
     else if (userId) filter = { userId, status: "active" };
 

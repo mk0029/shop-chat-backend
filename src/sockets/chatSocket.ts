@@ -412,7 +412,7 @@ export function registerChatSocket(io: Server) {
           { roomId: room._id, senderId: { $ne: user.id }, "readBy.userId": { $ne: user.id } },
           { $addToSet: { readBy: { userId: user.id, role: user.role, name: user.name, at: new Date() } }, $set: { status: "read" } },
         );
-        await Room.updateOne({ _id: room._id }, { $set: { [`unreadBy.${user.id}`]: 0 } });
+        await Room.updateOne({ _id: room._id }, { $set: { [`unreadBy.${user.id}`]: 0, [`customerUnreadBy.${user.id}`]: 0 } });
         chatNamespace?.to(`room:${room._id}`).emit("message:read", { roomId: String(room._id), userId: user.id, messageIds: [] });
       } catch {}
     });

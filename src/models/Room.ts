@@ -36,6 +36,7 @@ const RoomSchema = new Schema(
     lastMessage: { type: LastMessageSchema, default: null },
     lastCustomerMessage: { type: LastMessageSchema, default: null },
     unreadBy: { type: Map, of: Number, default: {} },
+    customerUnreadBy: { type: Map, of: Number, default: {} },
   },
   { timestamps: true },
 );

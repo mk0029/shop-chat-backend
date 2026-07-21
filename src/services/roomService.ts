@@ -11,6 +11,7 @@ function chatRoleFor(user: ShopUser) {
 
 export function serializeRoom(room: any) {
   const unreadByRaw = room.unreadBy instanceof Map ? Object.fromEntries(room.unreadBy) : room.unreadBy || {};
+  const customerUnreadByRaw = room.customerUnreadBy instanceof Map ? Object.fromEntries(room.customerUnreadBy) : room.customerUnreadBy || {};
   return {
     roomId: String(room._id),
     customerId: String(room.customerId),
@@ -21,6 +22,7 @@ export function serializeRoom(room: any) {
     lastMessage: room.lastMessage || null,
     lastCustomerMessage: room.lastCustomerMessage || null,
     unreadBy: unreadByRaw,
+    customerUnreadBy: customerUnreadByRaw,
     createdAt: room.createdAt?.toISOString?.() || room.createdAt,
     updatedAt: room.updatedAt?.toISOString?.() || room.updatedAt,
   };
@@ -68,6 +70,7 @@ export async function getOrCreateRoomForCustomer(customer: ShopUser): Promise<Ro
       $setOnInsert: {
         customerId: customer.id,
         unreadBy: {},
+        customerUnreadBy: {},
       },
       $set: {
         customerName: customer.name,
@@ -181,6 +184,7 @@ export async function createMessage(params: {
   }
 
   const unreadBy: Record<string, number> = {};
+  const customerUnreadBy: Record<string, number> = {};
   for (const participant of (params.room as any).participants || []) {
     const userId = String(participant.userId);
     if (userId !== senderId) {
@@ -188,6 +192,9 @@ export async function createMessage(params: {
         continue;
       }
       unreadBy[`unreadBy.${userId}`] = 1;
+      if (!systemEvent && (participant.role === "admin" || participant.role === "super_admin")) {
+        customerUnreadBy[`customerUnreadBy.${userId}`] = 1;
+      }
     }
   }
 
@@ -205,7 +212,7 @@ export async function createMessage(params: {
 
   const update: any = {
     $set: { lastMessage: lastMsg },
-    $inc: unreadBy,
+    $inc: { ...unreadBy, ...customerUnreadBy },
   };
   if (!systemEvent) {
     update.$set.lastCustomerMessage = lastMsg;
@@ -288,7 +295,7 @@ export async function clearRoomMessagesForEveryone(room: RoomDoc, user: ShopUser
   const allMessages = await Message.find({ roomId: room._id }).lean();
   const allPaths = allMessages.flatMap((msg) => extractFilePathsFromMessage(msg));
   await Message.deleteMany({ roomId: room._id });
-  await Room.updateOne({ _id: room._id }, { $set: { unreadBy: {} } });
+  await Room.updateOne({ _id: room._id }, { $set: { unreadBy: {}, customerUnreadBy: {} } });
   if (allPaths.length) {
     void deleteFiles(allPaths);
   }
@@ -398,6 +405,7 @@ export async function listRoomsForUser(user: ShopUser, cursor: string | null, li
         lastMessage: 1,
         lastCustomerMessage: 1,
         unreadBy: 1,
+        customerUnreadBy: 1,
         createdAt: 1,
         updatedAt: 1,
         "admins.userId": 1,
@@ -415,7 +423,7 @@ export async function listRoomsForUser(user: ShopUser, cursor: string | null, li
     .lean()
     .select({
       customerId: 1, customerKey: 1, customerName: 1,
-      lastMessage: 1, lastCustomerMessage: 1, unreadBy: 1, createdAt: 1, updatedAt: 1,
+      lastMessage: 1, lastCustomerMessage: 1, unreadBy: 1, customerUnreadBy: 1, createdAt: 1, updatedAt: 1,
       "admins.userId": 1,
       "participants.userId": 1,
     });

@@ -5,6 +5,7 @@ import { env } from "./config/env";
 import chatRoutes from "./routes/chatRoutes";
 import sessionRoutes from "./routes/sessionRoutes";
 import notificationRoutes from "./routes/notificationRoutes";
+import { createClient } from "@supabase/supabase-js";
 import { waf } from "./middleware/security/waf";
 import {
   authLimiter,
@@ -66,6 +67,28 @@ app.use(
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "shop-chat-backend", at: new Date().toISOString() });
+});
+
+app.get("/ping", async (_req, res) => {
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  if (!url || !key) {
+    return res.json({ ok: false, error: "Supabase not configured" });
+  }
+  try {
+    const admin = createClient(url, key, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const start = Date.now();
+    const { error } = await admin.rpc("ping");
+    const ms = Date.now() - start;
+    if (error) {
+      return res.json({ ok: false, error: error.message, ms });
+    }
+    res.json({ ok: true, ms, at: new Date().toISOString() });
+  } catch (err) {
+    res.json({ ok: false, error: err instanceof Error ? err.message : "unknown", at: new Date().toISOString() });
+  }
 });
 
 app.use((error: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

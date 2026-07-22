@@ -6,6 +6,7 @@ import { env, validateEnv } from "./config/env";
 import { registerChatSocket } from "./sockets/chatSocket";
 import { startNotificationScheduler } from "./services/notificationScheduler";
 import { startNotificationQueue, stopNotificationQueue } from "./services/notificationQueue";
+import { startSupabaseKeepAlive, stopSupabaseKeepAlive } from "./services/supabaseKeepAlive";
 import { notificationLogger } from "./lib/notificationLogger";
 
 async function main() {
@@ -26,6 +27,7 @@ async function main() {
 
   registerChatSocket(io);
   startNotificationScheduler();
+  startSupabaseKeepAlive();
 
   server.listen(env.port, () => {
     console.log(`[shop-chat] listening on ${env.port}`);
@@ -34,6 +36,7 @@ async function main() {
   const shutdown = () => {
     console.log("[shop-chat] shutting down...");
     stopNotificationQueue();
+    stopSupabaseKeepAlive();
     notificationLogger.stopPeriodicFlush();
     io.close();
     server.close(() => process.exit(0));

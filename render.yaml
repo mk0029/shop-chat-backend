@@ -39,3 +39,5 @@ services:
         value: Asia/Kolkata
       - key: ENABLE_NOTIFICATION_CRON
         value: "true"
+      - key: ENABLE_SUPABASE_KEEPALIVE
+        value: "true"

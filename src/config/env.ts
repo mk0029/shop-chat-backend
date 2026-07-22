@@ -30,6 +30,7 @@ export const env = {
   holidayCalendarCountry: process.env.HOLIDAY_CALENDAR_COUNTRY || "IN",
   supabaseUrl: process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "",
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
+  enableSupabaseKeepAlive: process.env.ENABLE_SUPABASE_KEEPALIVE === "true",
 };
 
 export function validateEnv() {

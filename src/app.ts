@@ -91,6 +91,48 @@ app.get("/ping", async (_req, res) => {
   }
 });
 
+app.get("/health/storage", async (_req, res) => {
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  if (!url || !key) {
+    return res.json({ ok: false, error: "Supabase not configured" });
+  }
+  try {
+    const admin = createClient(url, key, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const start = Date.now();
+    const { data: buckets, error: listError } = await admin.storage.listBuckets();
+    if (listError) {
+      return res.json({ ok: false, error: listError.message, ms: Date.now() - start });
+    }
+    const requiredBuckets = ["chat-media", "profile-images"];
+    const found: string[] = [];
+    const missing: string[] = [];
+    for (const name of requiredBuckets) {
+      if (buckets?.some((b) => b.name === name)) {
+        found.push(name);
+      } else {
+        missing.push(name);
+      }
+    }
+    let storageAccessible = false;
+    try {
+      const { data: files } = await admin.storage.from("chat-media").list("", { limit: 1 });
+      storageAccessible = !files?.length || files.length >= 0;
+    } catch {}
+    res.json({
+      ok: missing.length === 0 && storageAccessible,
+      buckets: { found, missing, total: buckets?.length || 0 },
+      storage: { accessible: storageAccessible },
+      ms: Date.now() - start,
+      at: new Date().toISOString(),
+    });
+  } catch (err) {
+    res.json({ ok: false, error: err instanceof Error ? err.message : "unknown", at: new Date().toISOString() });
+  }
+});
+
 app.use((error: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (error?.name === "ZodError") {
     return res.status(400).json({ message: "Validation failed", issues: error.issues });

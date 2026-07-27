@@ -12,7 +12,7 @@ async function ping() {
   if (!openwaUrl) return;
 
   try {
-    const res = await fetch(`${openwaUrl.replace(/\/+$/, "")}/api/sessions/keep-alive`, {
+    const res = await fetch(`${openwaUrl.replace(/\/+$/, "")}/api/internal/keep-alive`, {
       method: "GET",
       headers: {
         "x-api-key": openwaApiKey,

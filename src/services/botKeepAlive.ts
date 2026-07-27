@@ -16,7 +16,6 @@ async function ping() {
       method: "GET",
       headers: {
         "x-api-key": openwaApiKey,
-        "Content-Type": "application/json",
       },
       signal: AbortSignal.timeout(15_000),
     });
@@ -29,7 +28,8 @@ async function ping() {
         console.log(`[bot-keepalive] ok (ping #${pingCount}, sessions: ${alive}/${total} alive)`);
       }
     } else {
-      console.warn(`[bot-keepalive] unexpected status ${res.status} (ping #${pingCount})`);
+      const body = await res.text().catch(() => "");
+      console.warn(`[bot-keepalive] status ${res.status} (ping #${pingCount}): ${body.slice(0, 200)}`);
     }
   } catch (err) {
     console.warn(`[bot-keepalive] ping #${pingCount} failed:`, err instanceof Error ? err.message : err);

@@ -138,15 +138,9 @@ export function waf(req: Request, res: Response, next: NextFunction): void {
     return;
   }
 
-  const query = req.url?.split("?")[1] || "";
-  if (query) {
-    const threat = detectThreat(query);
-    if (threat) {
-      logBlock(req, `query:${threat}`, 400);
-      res.status(400).json({ message: "Request blocked by security policy" });
-      return;
-    }
-  }
+  // NOTE: raw query string scanning is intentionally omitted — it causes false positives on
+  // benign parameter names (e.g. "sessionId=..." triggers the XSS pattern /on\w+=/). Individual
+  // query param VALUES are scanned below.
 
   if (req.query) {
     for (const value of Object.values(req.query)) {

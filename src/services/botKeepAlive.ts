@@ -12,18 +12,21 @@ async function ping() {
   if (!openwaUrl) return;
 
   try {
-    const res = await fetch(`${openwaUrl.replace(/\/+$/, "")}/api/sessions`, {
+    const res = await fetch(`${openwaUrl.replace(/\/+$/, "")}/api/sessions/keep-alive`, {
       method: "GET",
       headers: {
         "x-api-key": openwaApiKey,
         "Content-Type": "application/json",
       },
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(15_000),
     });
 
     if (res.ok) {
+      const json = await res.json().catch(() => ({}));
+      const total = json?.total ?? 0;
+      const alive = json?.alive ?? 0;
       if (pingCount % 6 === 0) {
-        console.log(`[bot-keepalive] ok (ping #${pingCount}, status=${res.status})`);
+        console.log(`[bot-keepalive] ok (ping #${pingCount}, sessions: ${alive}/${total} alive)`);
       }
     } else {
       console.warn(`[bot-keepalive] unexpected status ${res.status} (ping #${pingCount})`);

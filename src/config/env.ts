@@ -31,6 +31,9 @@ export const env = {
   supabaseUrl: process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "",
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
   enableSupabaseKeepAlive: process.env.ENABLE_SUPABASE_KEEPALIVE === "true",
+  openwaUrl: process.env.OPENWA_URL || "",
+  openwaApiKey: process.env.OPENWA_API_KEY || "",
+  enableBotKeepAlive: process.env.ENABLE_BOT_KEEPALIVE === "true",
 };
 
 export function validateEnv() {

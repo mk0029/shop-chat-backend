@@ -201,7 +201,7 @@ router.get("/logs/recent", requireNotificationAccess, async (req: AuthRequest, r
 router.post("/bill-reminder/trigger", requireNotificationAccess, async (_req: AuthRequest, res, next) => {
   try {
     const result = await triggerBillReminders();
-    res.json({ success: true, ...result });
+    res.json({ success: true, ...result, debug: result.debug || undefined });
   } catch (error) {
     next(error);
   }

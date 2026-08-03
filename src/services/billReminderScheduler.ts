@@ -331,19 +331,25 @@ function tick() {
 
 let localSettings: ReminderSettings = DEFAULT_SETTINGS;
 
-export async function triggerBillReminders(): Promise<{ sent: number; skipped: number; failed: number }> {
+export async function triggerBillReminders(): Promise<{ sent: number; skipped: number; failed: number; debug: string }> {
   const settings = await loadSettings();
+  console.log("[BillReminder] Settings loaded:", JSON.stringify(settings));
+
   if (!settings.enabled) {
-    return { sent: 0, skipped: 0, failed: 0 };
+    console.log("[BillReminder] Reminders disabled in settings");
+    return { sent: 0, skipped: 0, failed: 0, debug: "reminders_disabled" };
   }
 
   if (!isWaConfigured()) {
-    return { sent: 0, skipped: 0, failed: 0 };
+    console.log("[BillReminder] WhatsApp not configured", { url: !!env.openwaUrl, key: !!env.openwaApiKey, session: !!env.openwaSessionId });
+    return { sent: 0, skipped: 0, failed: 0, debug: "wa_not_configured" };
   }
 
   const bills = await fetchPendingBills();
+  console.log(`[BillReminder] Fetched ${bills.length} pending bills`);
+
   if (!bills.length) {
-    return { sent: 0, skipped: 0, failed: 0 };
+    return { sent: 0, skipped: 0, failed: 0, debug: "no_pending_bills" };
   }
 
   let sent = 0;
@@ -399,7 +405,8 @@ export async function triggerBillReminders(): Promise<{ sent: number; skipped: n
     }
   }
 
-  return { sent, skipped, failed };
+  console.log(`[BillReminder] Done: sent=${sent}, skipped=${skipped}, failed=${failed}`);
+  return { sent, skipped, failed, debug: "" };
 }
 
 export async function startBillReminderScheduler(): Promise<void> {

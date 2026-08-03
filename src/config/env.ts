@@ -34,6 +34,8 @@ export const env = {
   openwaUrl: process.env.OPENWA_URL || "",
   openwaApiKey: process.env.OPENWA_API_KEY || "",
   enableBotKeepAlive: process.env.ENABLE_BOT_KEEPALIVE === "true",
+  openwaSessionId: process.env.OPENWA_SESSION_ID || "",
+  enableBillReminderCron: process.env.ENABLE_BILL_REMINDER_CRON === "true",
 };
 
 export function validateEnv() {

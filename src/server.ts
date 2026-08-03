@@ -8,6 +8,7 @@ import { startNotificationScheduler } from "./services/notificationScheduler";
 import { startNotificationQueue, stopNotificationQueue } from "./services/notificationQueue";
 import { startSupabaseKeepAlive, stopSupabaseKeepAlive } from "./services/supabaseKeepAlive";
 import { startBotKeepAlive, stopBotKeepAlive } from "./services/botKeepAlive";
+import { startBillReminderScheduler, stopBillReminderScheduler } from "./services/billReminderScheduler";
 import { notificationLogger } from "./lib/notificationLogger";
 
 async function main() {
@@ -31,6 +32,10 @@ async function main() {
   startSupabaseKeepAlive();
   startBotKeepAlive();
 
+  if (env.enableBillReminderCron) {
+    startBillReminderScheduler();
+  }
+
   server.listen(env.port, () => {
     console.log(`[shop-chat] listening on ${env.port}`);
   });
@@ -40,6 +45,7 @@ async function main() {
     stopNotificationQueue();
     stopSupabaseKeepAlive();
     stopBotKeepAlive();
+    stopBillReminderScheduler();
     notificationLogger.stopPeriodicFlush();
     io.close();
     server.close(() => process.exit(0));

@@ -242,7 +242,7 @@ function defaultTitleBody(type: NotificationEventType, data: Record<string, any>
   if (type.startsWith("workTask.")) return { title: "Work task update", body: cleanNotificationText(data.title || data.message, "A work task was updated.") };
   if (type.startsWith("toolRent.")) return { title: "Tool rent update", body: cleanNotificationText(data.title || data.message, "Tool rent update.") };
   if (type.includes("Greeting") || type.includes("good_morning") || type.includes("festival")) {
-    return { title: title || "Greetings", body: body || "Best wishes from Jambh Electrics." };
+    return { title: title || "Greetings", body: body || "Best wishes from Jambh Electricals." };
   }
   return { title: title || "Notification", body: body || cleanNotificationText(data.message, "You have a new notification.") };
 }
@@ -288,7 +288,7 @@ async function targetsFor(input: NotificationInput, normalizedEventType: Notific
         return {
           userId: user.userId,
           title: `Good morning ${name}`,
-          body: `Good morning ${name}. Have a great day from Jambh Electrics.`,
+          body: `Good morning ${name}. Have a great day from Jambh Electricals.`,
           data: { ...data, greetingName: name },
         };
       });

@@ -163,23 +163,16 @@ async function fetchPendingBills(): Promise<BillDoc[]> {
   );
   console.log(`[BillReminder] Raw bills from Sanity: ${allBills.length}`);
 
-  if (allBills.length > 0) {
-    const sample = allBills[0];
-    console.log("[BillReminder] Sample bill:", JSON.stringify({
-      _id: sample._id,
-      billNumber: sample.billNumber,
-      status: sample.status,
-      paymentStatus: sample.paymentStatus,
-      totalAmount: sample.totalAmount,
-      paidAmount: sample.paidAmount,
-      balanceAmount: sample.balanceAmount,
-      hasCustomer: !!sample.customer,
-      customerId: sample.customer?._id,
-      customerName: sample.customer?.name,
-      customerPhone: sample.customer?.phone,
-      customerAllowReminder: sample.customer?.allowDueReminder,
-    }));
+  const statusCounts: Record<string, number> = {};
+  const psCounts: Record<string, number> = {};
+  for (const b of allBills) {
+    const st = String(b.status || "empty").toLowerCase();
+    const ps = String(b.paymentStatus || "empty").toLowerCase();
+    statusCounts[st] = (statusCounts[st] || 0) + 1;
+    psCounts[ps] = (psCounts[ps] || 0) + 1;
   }
+  console.log("[BillReminder] Status distribution:", JSON.stringify(statusCounts));
+  console.log("[BillReminder] PaymentStatus distribution:", JSON.stringify(psCounts));
 
   const eligible = allBills.filter(isEligibleBill);
   console.log(`[BillReminder] After isEligibleBill filter: ${eligible.length}`);

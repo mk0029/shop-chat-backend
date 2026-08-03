@@ -230,6 +230,10 @@ async function createReminderLog(params: {
   }
 }
 
+export async function loadBillReminderSettings(): Promise<ReminderSettings> {
+  return loadSettings();
+}
+
 async function processReminders(): Promise<void> {
   if (!isWaConfigured()) {
     console.warn("[BillReminder] WhatsApp bot not configured, skipping");
@@ -326,6 +330,77 @@ function tick() {
 }
 
 let localSettings: ReminderSettings = DEFAULT_SETTINGS;
+
+export async function triggerBillReminders(): Promise<{ sent: number; skipped: number; failed: number }> {
+  const settings = await loadSettings();
+  if (!settings.enabled) {
+    return { sent: 0, skipped: 0, failed: 0 };
+  }
+
+  if (!isWaConfigured()) {
+    return { sent: 0, skipped: 0, failed: 0 };
+  }
+
+  const bills = await fetchPendingBills();
+  if (!bills.length) {
+    return { sent: 0, skipped: 0, failed: 0 };
+  }
+
+  let sent = 0;
+  let skipped = 0;
+  let failed = 0;
+  const dateKey = indianDateKey();
+
+  for (const bill of bills) {
+    const customerId = bill.customer!._id;
+    const dedupeKey = `${customerId}:${bill._id}:${dateKey}`;
+
+    if (sentToday.has(dedupeKey)) {
+      skipped++;
+      continue;
+    }
+
+    if (bill.customer!.allowDueReminder === false) {
+      skipped++;
+      await createReminderLog({ billId: bill._id, customerId, status: "skipped", reason: "customer_disabled" });
+      continue;
+    }
+
+    if (pendingAmount(bill) < settings.minimumAmount) {
+      skipped++;
+      await createReminderLog({ billId: bill._id, customerId, status: "skipped", reason: "below_minimum" });
+      continue;
+    }
+
+    if (!isReminderDue(bill, settings.gapDays)) {
+      skipped++;
+      await createReminderLog({ billId: bill._id, customerId, status: "skipped", reason: "gap_not_completed" });
+      continue;
+    }
+
+    const phone = String(bill.customer!.phone || "").trim();
+    if (!phone) {
+      skipped++;
+      await createReminderLog({ billId: bill._id, customerId, status: "skipped", reason: "no_phone" });
+      continue;
+    }
+
+    const message = buildReminderMessage(bill);
+    const result = await sendWaText(phone, message);
+
+    if (result.ok) {
+      sent++;
+      sentToday.add(dedupeKey);
+      await updateBillTracking(bill._id);
+      await createReminderLog({ billId: bill._id, customerId, status: "sent" });
+    } else {
+      failed++;
+      await createReminderLog({ billId: bill._id, customerId, status: "failed", reason: result.error });
+    }
+  }
+
+  return { sent, skipped, failed };
+}
 
 export async function startBillReminderScheduler(): Promise<void> {
   if (schedulerStarted) return;

@@ -11,6 +11,7 @@ import {
   updateDeviceSetting,
 } from "../services/notificationCenter";
 import { dispatchNotificationBackground, getNotificationQueueStats } from "../services/notificationDispatcher";
+import { triggerBillReminders, loadBillReminderSettings } from "../services/billReminderScheduler";
 import { notificationLogger } from "../lib/notificationLogger";
 
 const router = Router();
@@ -192,6 +193,24 @@ router.get("/logs/recent", requireNotificationAccess, async (req: AuthRequest, r
     const count = Math.max(1, Math.min(200, Number(req.query.count || 50)));
     const logs = notificationLogger.getRecentLogs(count);
     res.json({ success: true, logs });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/bill-reminder/trigger", requireNotificationAccess, async (_req: AuthRequest, res, next) => {
+  try {
+    const result = await triggerBillReminders();
+    res.json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/bill-reminder/settings", requireNotificationAccess, async (_req: AuthRequest, res, next) => {
+  try {
+    const settings = await loadBillReminderSettings();
+    res.json({ success: true, settings });
   } catch (error) {
     next(error);
   }

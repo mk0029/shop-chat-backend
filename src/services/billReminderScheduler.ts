@@ -86,8 +86,8 @@ function pendingAmount(bill: BillDoc): number {
 function isEligibleBill(bill: BillDoc): boolean {
   const ps = String(bill.paymentStatus || "").toLowerCase();
   const st = String(bill.status || "").toLowerCase();
-  if (["paid", "cancelled", "deleted", "draft", "refunded", "archived"].includes(ps)) return false;
-  if (["cancelled", "deleted", "draft", "archived"].includes(st)) return false;
+  if (["paid", "cancelled", "deleted", "refunded", "archived"].includes(ps)) return false;
+  if (["cancelled", "deleted", "archived"].includes(st)) return false;
   return pendingAmount(bill) > 0;
 }
 

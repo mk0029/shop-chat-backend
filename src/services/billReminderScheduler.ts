@@ -154,14 +154,40 @@ async function loadSettings(): Promise<ReminderSettings> {
 }
 
 async function fetchPendingBills(): Promise<BillDoc[]> {
-  const bills = await sanityClient.fetch<BillDoc[]>(
+  const allBills = await sanityClient.fetch<BillDoc[]>(
     `*[_type == "bill"] | order(dueDate asc) {
       _id, billNumber, status, paymentStatus, totalAmount, paidAmount, balanceAmount,
       dueDate, createdAt, lastReminderSentAt, reminderCount,
       customer->{ _id, name, nickname, phone, allowDueReminder }
     }`,
   );
-  return (bills || []).filter(isEligibleBill).filter((b) => b.customer?._id && b.customer?.phone);
+  console.log(`[BillReminder] Raw bills from Sanity: ${allBills.length}`);
+
+  if (allBills.length > 0) {
+    const sample = allBills[0];
+    console.log("[BillReminder] Sample bill:", JSON.stringify({
+      _id: sample._id,
+      billNumber: sample.billNumber,
+      status: sample.status,
+      paymentStatus: sample.paymentStatus,
+      totalAmount: sample.totalAmount,
+      paidAmount: sample.paidAmount,
+      balanceAmount: sample.balanceAmount,
+      hasCustomer: !!sample.customer,
+      customerId: sample.customer?._id,
+      customerName: sample.customer?.name,
+      customerPhone: sample.customer?.phone,
+      customerAllowReminder: sample.customer?.allowDueReminder,
+    }));
+  }
+
+  const eligible = allBills.filter(isEligibleBill);
+  console.log(`[BillReminder] After isEligibleBill filter: ${eligible.length}`);
+
+  const withPhone = eligible.filter((b) => b.customer?._id && b.customer?.phone);
+  console.log(`[BillReminder] After phone filter: ${withPhone.length}`);
+
+  return withPhone;
 }
 
 function isReminderDue(bill: BillDoc, gapDays: number): boolean {
